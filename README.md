@@ -9,6 +9,7 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
 ## Funcionalidades
 
 ### MVP (Primera versión)
+
 - Configuración de temporizador:
   - Tiempo de ejercicio (segundos)
   - Tiempo de descanso (segundos)
@@ -23,6 +24,7 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
   - Sonido B al terminar descanso (inicio ejercicio o fin total)
 
 ### Fase 2 (Después del MVP)
+
 - Presets:
   - Guardar preset (nombre + configuración)
   - Listar presets
@@ -33,6 +35,7 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
   - Contador “3, 2, 1” antes de empezar (opcional)
 
 ### Fase 3 (Opcional)
+
 - Historial de entrenos
 - Personalización de sonidos
 - Notificaciones/controles en segundo plano
@@ -42,28 +45,35 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
 ## Stack propuesto
 
 **Opción recomendada (por experiencia previa en JS):**
+
 - React Native + Expo
 - Persistencia: AsyncStorage (presets)
 - Audio: expo-av (sonidos)
 
-> Si se prefiere Android nativo (Kotlin + Jetpack Compose), se puede replantear el stack.
+> Valorar Android nativo (Kotlin + Jetpack Compose)
 
 ---
 
 ## Estructura inicial (tentativa)
 
-/src
-/components
-TimerDisplay.tsx
-PresetList.tsx
-/screens
-SetupScreen.tsx
-TimerScreen.tsx
-PresetsScreen.tsx
-/services
-timerEngine.ts
-presetsStorage.ts
-sound.ts
-/models
-Preset.ts
-App.tsx
+```text
+src/
+├─ components/
+│  ├─ TimerDisplay.tsx
+│  └─ PresetList.tsx
+│
+├─ screens/
+│  ├─ SetupScreen.tsx
+│  ├─ TimerScreen.tsx
+│  └─ PresetsScreen.tsx
+│
+├─ services/
+│  ├─ timerEngine.ts
+│  ├─ presetsStorage.ts
+│  └─ sound.ts
+│
+├─ models/
+│  └─ Preset.ts
+│
+└─ App.tsx
+
