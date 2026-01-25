@@ -57,23 +57,17 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
 ## Estructura inicial (tentativa)
 
 ```text
-src/
-├─ components/
-│  ├─ TimerDisplay.tsx
-│  └─ PresetList.tsx
-│
-├─ screens/
-│  ├─ SetupScreen.tsx
-│  ├─ TimerScreen.tsx
-│  └─ PresetsScreen.tsx
-│
-├─ services/
-│  ├─ timerEngine.ts
-│  ├─ presetsStorage.ts
-│  └─ sound.ts
-│
-├─ models/
-│  └─ Preset.ts
-│
-└─ App.tsx
+/src
+  /app            // navegación/pantallas (si usa Expo Router) o "screens"
+  /screens        // si NO uso Expo Router, aquí van las pantallas
+  /components     // componentes UI reutilizables (botones, inputs, etc.)
+  /domain
+    /models       // tipos/entidades del dominio (Preset, TimerState...)
+    /validators   // validaciones del dominio
+  /services
+    storage.ts    // persistencia (AsyncStorage)
+    timer.ts      // lógica del temporizador
+  /utils          // helpers genéricos (formateo mm:ss, etc.)
+/assets
+  /sounds         // sonidos
 
