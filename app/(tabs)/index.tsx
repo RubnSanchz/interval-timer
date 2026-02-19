@@ -62,7 +62,15 @@ export default function ConfigScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 10, backgroundColor: "white" },
+  container: {
+    flex: 1,
+    padding: 16,
+    gap: 10,
+    backgroundColor: "white",
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+  },
   title: { fontSize: 22, fontWeight: "600", marginBottom: 8 },
   label: { fontSize: 14, fontWeight: "500" },
   input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 10, padding: 12 },
