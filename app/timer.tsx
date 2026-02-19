@@ -23,6 +23,7 @@ export default function TimerScreen() {
  const secondaryText = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
  const ghostBorder = useThemeColor({ light: "#bbb", dark: "#333" }, "text");
  const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
+ const ghostBackground = useThemeColor({ light: "#F3F4F6", dark: "#1E2023" }, "background");
  const params = useLocalSearchParams<{
   sets?: string | string[];
   exerciseSeconds?: string | string[];
@@ -266,7 +267,7 @@ export default function TimerScreen() {
        onPress={resetTimer}
       >
        <View style={styles.buttonContent}>
-        <IconSymbol name="arrow.counterclockwise" size={20} color={primaryText} />
+        <IconSymbol name="arrow.counterclockwise" size={20} color={primaryText} style={styles.iconSmall} />
         <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Reiniciar</Text>
        </View>
       </Pressable>
@@ -279,7 +280,7 @@ export default function TimerScreen() {
           onPress={pauseTimer}
           accessibilityLabel="Pausar"
          >
-          <IconSymbol name="pause.fill" size={24} color={secondaryText} />
+          <IconSymbol name="pause.fill" size={24} color={secondaryText} style={styles.iconLarge} />
          </Pressable>
         )}
         {status === "paused" && (
@@ -288,7 +289,7 @@ export default function TimerScreen() {
           onPress={resumeTimer}
           accessibilityLabel="Reanudar"
          >
-          <IconSymbol name="play.fill" size={24} color={primaryText} />
+          <IconSymbol name="play.fill" size={24} color={primaryText} style={styles.iconLarge} />
          </Pressable>
         )}
         {status === "holding" && (
@@ -297,35 +298,47 @@ export default function TimerScreen() {
           onPress={continueTimer}
           accessibilityLabel="Continuar"
          >
-          <IconSymbol name="play.fill" size={24} color={primaryText} />
+          <IconSymbol name="play.fill" size={24} color={primaryText} style={styles.iconLarge} />
          </Pressable>
         )}
        </View>
        <View style={styles.controlsRow}>
-        <Pressable
-         style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
-         onPress={resetSet}
-        >
+       <Pressable
+        style={StyleSheet.flatten([
+         styles.ghostButton,
+         styles.controlThird,
+         { borderColor: ghostBorder, backgroundColor: ghostBackground },
+        ])}
+        onPress={resetSet}
+       >
          <View style={styles.buttonContent}>
-          <IconSymbol name="repeat" size={18} color={ghostText} />
+          <IconSymbol name="repeat" size={18} color={ghostText} style={styles.iconSmall} />
           <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar set</Text>
          </View>
         </Pressable>
-        <Pressable
-         style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
-         onPress={resetTimer}
-        >
+       <Pressable
+        style={StyleSheet.flatten([
+         styles.ghostButton,
+         styles.controlThird,
+         { borderColor: ghostBorder, backgroundColor: ghostBackground },
+        ])}
+        onPress={resetTimer}
+       >
          <View style={styles.buttonContent}>
-          <IconSymbol name="arrow.counterclockwise" size={18} color={ghostText} />
+          <IconSymbol name="arrow.counterclockwise" size={18} color={ghostText} style={styles.iconSmall} />
           <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar ejercicio</Text>
          </View>
         </Pressable>
-        <Pressable
-         style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
-         onPress={skipSet}
-        >
+       <Pressable
+        style={StyleSheet.flatten([
+         styles.ghostButton,
+         styles.controlThird,
+         { borderColor: ghostBorder, backgroundColor: ghostBackground },
+        ])}
+        onPress={skipSet}
+       >
          <View style={styles.buttonContent}>
-          <IconSymbol name="forward.end.fill" size={18} color={ghostText} />
+          <IconSymbol name="forward.end.fill" size={18} color={ghostText} style={styles.iconSmall} />
           <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Saltar set</Text>
          </View>
         </Pressable>
@@ -361,13 +374,48 @@ const styles = StyleSheet.create({
  controlsRow: { width: "100%", flexDirection: "row", gap: 10 },
  controlFull: { flex: 1 },
  controlThird: { flex: 1 },
- buttonContent: { flexDirection: "row", alignItems: "center", gap: 8 },
- primaryButton: { padding: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#111" },
- primaryButtonText: { color: "white", fontWeight: "600" },
- secondaryButton: { padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#111" },
- secondaryButtonText: { color: "#111", fontWeight: "600" },
- ghostButton: { padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#bbb" },
- ghostButtonText: { color: "#444", fontWeight: "600" },
+ buttonContent: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "100%",
+  width: "100%",
+  gap: 8,
+ },
+ iconLarge: { lineHeight: 24, textAlignVertical: "center" },
+ iconSmall: { lineHeight: 18, textAlignVertical: "center" },
+ primaryButton: {
+  paddingHorizontal: 16,
+  paddingVertical: 0,
+  borderRadius: 12,
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 52,
+  backgroundColor: "#111",
+ },
+ primaryButtonText: { color: "white", fontWeight: "600", fontSize: 14, lineHeight: 18, textAlign: "center" },
+ secondaryButton: {
+  paddingHorizontal: 16,
+  paddingVertical: 0,
+  borderRadius: 12,
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 52,
+  borderWidth: 1,
+  borderColor: "#111",
+ },
+ secondaryButtonText: { color: "#111", fontWeight: "600", fontSize: 14, lineHeight: 18, textAlign: "center" },
+ ghostButton: {
+  paddingHorizontal: 14,
+  paddingVertical: 0,
+  borderRadius: 12,
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 52,
+  borderWidth: 1,
+  borderColor: "#bbb",
+ },
+ ghostButtonText: { color: "#444", fontWeight: "600", fontSize: 13, lineHeight: 16, textAlign: "center" },
  backButton: { marginTop: "auto", padding: 12 },
  backButtonText: { color: "#111", fontWeight: "600" },
  errorContainer: { flex: 1, padding: 20, alignItems: "center", justifyContent: "center", gap: 12 },
