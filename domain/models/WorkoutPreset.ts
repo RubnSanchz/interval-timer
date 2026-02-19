@@ -1,4 +1,4 @@
-// src/domain/models/WorkoutPreset.ts
+// domain/models/WorkoutPreset.ts
 export type WorkoutPreset = {
   id: string;
   name: string;
@@ -7,5 +7,6 @@ export type WorkoutPreset = {
   restSeconds: number;
   createdAt: string; // ISO
   updatedAt: string; // ISO
-  // TODO: incluir colores de pantalla para exercise y rest
 };
+
+export type WorkoutPresetInput = Omit<WorkoutPreset, "id" | "createdAt" | "updatedAt">;

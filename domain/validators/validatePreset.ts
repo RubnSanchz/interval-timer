@@ -1,7 +1,7 @@
-// src/domain/validators/validatePreset.ts
-import { WorkoutPreset } from "../models/WorkoutPreset";
+// domain/validators/validatePreset.ts
+import type { WorkoutPresetInput } from "../models/WorkoutPreset";
 
-export function validatePreset(input: Omit<WorkoutPreset, "id" | "createdAt" | "updatedAt">) {
+export function validatePreset(input: WorkoutPresetInput) {
   const name = input.name.trim();
   if (!name) throw new Error("El nombre no puede estar vacío.");
   if (!Number.isInteger(input.sets) || input.sets < 1) throw new Error("Sets debe ser un entero >= 1.");
