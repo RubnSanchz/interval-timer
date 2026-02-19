@@ -9,6 +9,8 @@ export function validatePreset(input: WorkoutPresetInput) {
     sets: input.sets,
     exerciseSeconds: input.exerciseSeconds,
     restSeconds: input.restSeconds,
+    exerciseAutoAdvance: input.exerciseAutoAdvance,
+    restAutoAdvance: input.restAutoAdvance,
   });
   return { ...config, name };
 }

@@ -5,6 +5,8 @@ export type WorkoutPreset = {
   sets: number;
   exerciseSeconds: number;
   restSeconds: number;
+  exerciseAutoAdvance: boolean;
+  restAutoAdvance: boolean;
   createdAt: string; // ISO
   updatedAt: string; // ISO
 };
