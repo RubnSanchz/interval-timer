@@ -2,9 +2,18 @@ import { View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-nativ
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
+import { useThemeColor } from "@/hooks/use-theme-color";
 
 export default function ConfigScreen() {
   const router = useRouter();
+  const backgroundColor = useThemeColor({}, "background");
+  const textColor = useThemeColor({}, "text");
+  const borderColor = useThemeColor({ light: "#ccc", dark: "#333" }, "text");
+  const inputBackground = useThemeColor({ light: "white", dark: "#1c1d1f" }, "background");
+  const primaryBackground = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+  const primaryText = useThemeColor({ light: "white", dark: "#111" }, "text");
+  const secondaryBorder = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+  const secondaryText = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
   const [sets, setSets] = useState("5");
   const [exercise, setExercise] = useState("45");
   const [rest, setRest] = useState("15");
@@ -36,37 +45,67 @@ export default function ConfigScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Configurar intervalo</Text>
+    <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
+      <View style={styles.container}>
+        <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Configurar intervalo</Text>
 
-      <Text style={styles.label}>Numero de sets</Text>
-      <TextInput style={styles.input} value={sets} onChangeText={setSets} keyboardType="number-pad" />
+        <Text style={StyleSheet.flatten([styles.label, { color: textColor }])}>Numero de sets</Text>
+        <TextInput
+          style={StyleSheet.flatten([
+            styles.input,
+            { borderColor, backgroundColor: inputBackground, color: textColor },
+          ])}
+          value={sets}
+          onChangeText={setSets}
+          keyboardType="number-pad"
+        />
 
-      <Text style={styles.label}>Ejercicio (segundos)</Text>
-      <TextInput style={styles.input} value={exercise} onChangeText={setExercise} keyboardType="number-pad" />
+        <Text style={StyleSheet.flatten([styles.label, { color: textColor }])}>Ejercicio (segundos)</Text>
+        <TextInput
+          style={StyleSheet.flatten([
+            styles.input,
+            { borderColor, backgroundColor: inputBackground, color: textColor },
+          ])}
+          value={exercise}
+          onChangeText={setExercise}
+          keyboardType="number-pad"
+        />
 
-      <Text style={styles.label}>Descanso (segundos)</Text>
-      <TextInput style={styles.input} value={rest} onChangeText={setRest} keyboardType="number-pad" />
+        <Text style={StyleSheet.flatten([styles.label, { color: textColor }])}>Descanso (segundos)</Text>
+        <TextInput
+          style={StyleSheet.flatten([
+            styles.input,
+            { borderColor, backgroundColor: inputBackground, color: textColor },
+          ])}
+          value={rest}
+          onChangeText={setRest}
+          keyboardType="number-pad"
+        />
 
-      <Pressable style={styles.primaryButton} onPress={onStart}>
-        <Text style={styles.primaryButtonText}>Iniciar</Text>
-      </Pressable>
-
-      <Link href="/create-preset" asChild>
-        <Pressable style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Crear preset</Text>
+        <Pressable
+          style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
+          onPress={onStart}>
+          <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Iniciar</Text>
         </Pressable>
-      </Link>
+
+        <Link href="/create-preset" asChild>
+          <Pressable style={StyleSheet.flatten([styles.secondaryButton, { borderColor: secondaryBorder }])}>
+            <Text style={StyleSheet.flatten([styles.secondaryButtonText, { color: secondaryText }])}>
+              Crear preset
+            </Text>
+          </Pressable>
+        </Link>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   container: {
     flex: 1,
     padding: 16,
     gap: 10,
-    backgroundColor: "white",
     width: "100%",
     maxWidth: 520,
     alignSelf: "center",
