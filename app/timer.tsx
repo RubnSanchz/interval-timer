@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
 import { formatTime } from "@/utils/formatTime";
+import { useThemeColor } from "@/hooks/use-theme-color";
 
 const PREP_SECONDS = 5;
 
@@ -12,6 +13,15 @@ type PendingTransition = { phase: "exercise" | "rest"; setIndex: number; remaini
 
 export default function TimerScreen() {
   const router = useRouter();
+  const backgroundColor = useThemeColor({}, "background");
+  const textColor = useThemeColor({}, "text");
+  const mutedTextColor = useThemeColor({ light: "#666", dark: "#9ba1a6" }, "text");
+  const primaryBackground = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+  const primaryText = useThemeColor({ light: "white", dark: "#111" }, "text");
+  const secondaryBorder = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+  const secondaryText = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+  const ghostBorder = useThemeColor({ light: "#bbb", dark: "#333" }, "text");
+  const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
   const params = useLocalSearchParams<{
     sets?: string | string[];
     exerciseSeconds?: string | string[];
@@ -53,12 +63,14 @@ export default function TimerScreen() {
 
   if (!configResult.config) {
     return (
-      <View style={styles.errorContainer}>
+      <View style={StyleSheet.flatten([styles.errorContainer, { backgroundColor }])}>
         <Stack.Screen options={{ title: "Timer" }} />
-        <Text style={styles.title}>Configuracion invalida</Text>
-        <Text style={styles.errorText}>{configResult.error}</Text>
-        <Pressable style={styles.primaryButton} onPress={() => router.back()}>
-          <Text style={styles.primaryButtonText}>Volver</Text>
+        <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Configuracion invalida</Text>
+        <Text style={StyleSheet.flatten([styles.errorText, { color: mutedTextColor }])}>{configResult.error}</Text>
+        <Pressable
+          style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
+          onPress={() => router.back()}>
+          <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Volver</Text>
         </Pressable>
       </View>
     );
@@ -187,48 +199,68 @@ export default function TimerScreen() {
     phase === "prep" ? "Preparacion" : phase === "exercise" ? "Ejercicio" : phase === "rest" ? "Descanso" : "Completado";
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ title: "Timer" }} />
-      <Text style={styles.title}>Intervalo en curso</Text>
-      <Text style={styles.phase}>{phaseLabel}</Text>
-      <Text style={styles.timer}>{formatTime(remaining)}</Text>
-      <Text style={styles.meta}>
-        Set {Math.min(setIndex, config.sets)} de {config.sets}
-      </Text>
+    <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
+      <View style={styles.container}>
+        <Stack.Screen options={{ title: "Timer" }} />
+        <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Intervalo en curso</Text>
+        <Text style={StyleSheet.flatten([styles.phase, { color: mutedTextColor }])}>{phaseLabel}</Text>
+        <Text style={StyleSheet.flatten([styles.timer, { color: textColor }])}>{formatTime(remaining)}</Text>
+        <Text style={StyleSheet.flatten([styles.meta, { color: mutedTextColor }])}>
+          Set {Math.min(setIndex, config.sets)} de {config.sets}
+        </Text>
 
-      <View style={styles.controls}>
-        {status === "running" && (
-          <Pressable style={styles.secondaryButton} onPress={pauseTimer}>
-            <Text style={styles.secondaryButtonText}>Pausar</Text>
+        <View style={styles.controls}>
+          {status === "running" && (
+            <Pressable
+              style={StyleSheet.flatten([styles.secondaryButton, { borderColor: secondaryBorder }])}
+              onPress={pauseTimer}>
+              <Text style={StyleSheet.flatten([styles.secondaryButtonText, { color: secondaryText }])}>Pausar</Text>
+            </Pressable>
+          )}
+          {status === "paused" && (
+            <Pressable
+              style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
+              onPress={resumeTimer}>
+              <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Reanudar</Text>
+            </Pressable>
+          )}
+          {status === "holding" && (
+            <Pressable
+              style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
+              onPress={continueTimer}>
+              <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Continuar</Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={StyleSheet.flatten([
+              status === "done" ? styles.primaryButton : styles.ghostButton,
+              status === "done" ? { backgroundColor: primaryBackground } : { borderColor: ghostBorder },
+            ])}
+            onPress={resetTimer}>
+            <Text
+              style={
+                status === "done"
+                  ? StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])
+                  : StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])
+              }>
+              Reiniciar
+            </Text>
           </Pressable>
-        )}
-        {status === "paused" && (
-          <Pressable style={styles.primaryButton} onPress={resumeTimer}>
-            <Text style={styles.primaryButtonText}>Reanudar</Text>
-          </Pressable>
-        )}
-        {status === "holding" && (
-          <Pressable style={styles.primaryButton} onPress={continueTimer}>
-            <Text style={styles.primaryButtonText}>Continuar</Text>
-          </Pressable>
-        )}
-        <Pressable style={status === "done" ? styles.primaryButton : styles.ghostButton} onPress={resetTimer}>
-          <Text style={status === "done" ? styles.primaryButtonText : styles.ghostButtonText}>Reiniciar</Text>
+        </View>
+
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Text style={StyleSheet.flatten([styles.backButtonText, { color: textColor }])}>Volver</Text>
         </Pressable>
       </View>
-
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backButtonText}>Volver</Text>
-      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "white",
     alignItems: "center",
     gap: 12,
     width: "100%",
