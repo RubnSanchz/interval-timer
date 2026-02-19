@@ -1,5 +1,5 @@
-// src/services/storage.ts
-import { WorkoutPreset } from "../domain/models/WorkoutPreset";
+// services/storage.ts
+import type { WorkoutPreset } from "../domain/models/WorkoutPreset";
 
 export interface PresetStorage {
   list(): Promise<WorkoutPreset[]>;

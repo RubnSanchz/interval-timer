@@ -1,5 +1,6 @@
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import { useState } from "react";
+import { createPreset } from "@/domain/presets/createPreset";
 
 export default function CreatePresetScreen() {
   const [name, setName] = useState("");
@@ -8,21 +9,19 @@ export default function CreatePresetScreen() {
   const [rest, setRest] = useState("15");
 
   function onCreate() {
-    const trimmed = name.trim();
-    if (!trimmed) return Alert.alert("Error", "El nombre no puede estar vacío.");
+    try {
+      const preset = createPreset({
+        name,
+        sets: Number(sets),
+        exerciseSeconds: Number(exercise),
+        restSeconds: Number(rest),
+      });
 
-    const setsN = Number(sets);
-    const exN = Number(exercise);
-    const restN = Number(rest);
-
-    if (!Number.isInteger(setsN) || setsN < 1) return Alert.alert("Error", "Sets debe ser un entero >= 1.");
-    if (!Number.isInteger(exN) || exN < 1) return Alert.alert("Error", "Ejercicio debe ser >= 1 segundo.");
-    if (!Number.isInteger(restN) || restN < 0) return Alert.alert("Error", "Descanso debe ser >= 0 segundos.");
-
-    Alert.alert(
-      "Preset creado (en memoria)",
-      JSON.stringify({ name: trimmed, sets: setsN, exerciseSeconds: exN, restSeconds: restN }, null, 2)
-    );
+      Alert.alert("Preset creado (en memoria)", JSON.stringify(preset, null, 2));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
+      Alert.alert("Error", message);
+    }
   }
 
   return (
@@ -30,7 +29,7 @@ export default function CreatePresetScreen() {
       <Text style={styles.title}>Crear preset</Text>
 
       <Text style={styles.label}>Nombre</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ej. HIIT 45/15" />
+      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ej. HIIT 45/15 x4" />
 
       <Text style={styles.label}>Número de sets</Text>
       <TextInput style={styles.input} value={sets} onChangeText={setSets} keyboardType="number-pad" />
