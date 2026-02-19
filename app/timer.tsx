@@ -1,3 +1,4 @@
+import { IconSymbol } from "@/components/ui/icon-symbol";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { formatTime } from "@/utils/formatTime";
@@ -264,7 +265,10 @@ export default function TimerScreen() {
        style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
        onPress={resetTimer}
       >
-       <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Reiniciar</Text>
+       <View style={styles.buttonContent}>
+        <IconSymbol name="arrow.counterclockwise" size={20} color={primaryText} />
+        <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Reiniciar</Text>
+       </View>
       </Pressable>
      ) : (
       <>
@@ -273,47 +277,59 @@ export default function TimerScreen() {
          <Pressable
           style={StyleSheet.flatten([styles.secondaryButton, styles.controlFull, { borderColor: secondaryBorder }])}
           onPress={pauseTimer}
+          accessibilityLabel="Pausar"
          >
-          <Text style={StyleSheet.flatten([styles.secondaryButtonText, { color: secondaryText }])}>Pausar</Text>
+          <IconSymbol name="pause.fill" size={24} color={secondaryText} />
          </Pressable>
         )}
         {status === "paused" && (
          <Pressable
           style={StyleSheet.flatten([styles.primaryButton, styles.controlFull, { backgroundColor: primaryBackground }])}
           onPress={resumeTimer}
+          accessibilityLabel="Reanudar"
          >
-          <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Reanudar</Text>
+          <IconSymbol name="play.fill" size={24} color={primaryText} />
          </Pressable>
         )}
         {status === "holding" && (
          <Pressable
           style={StyleSheet.flatten([styles.primaryButton, styles.controlFull, { backgroundColor: primaryBackground }])}
           onPress={continueTimer}
+          accessibilityLabel="Continuar"
          >
-          <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Continuar</Text>
+          <IconSymbol name="play.fill" size={24} color={primaryText} />
          </Pressable>
         )}
        </View>
-      <View style={styles.controlsRow}>
-       <Pressable
-        style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
-        onPress={resetSet}
-       >
-        <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar set</Text>
-       </Pressable>
-       <Pressable
-        style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
-        onPress={resetTimer}
-       >
-        <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar ejercicio</Text>
-       </Pressable>
-       <Pressable
-        style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
-        onPress={skipSet}
-       >
-        <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Saltar set</Text>
-       </Pressable>
-      </View>
+       <View style={styles.controlsRow}>
+        <Pressable
+         style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
+         onPress={resetSet}
+        >
+         <View style={styles.buttonContent}>
+          <IconSymbol name="repeat" size={18} color={ghostText} />
+          <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar set</Text>
+         </View>
+        </Pressable>
+        <Pressable
+         style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
+         onPress={resetTimer}
+        >
+         <View style={styles.buttonContent}>
+          <IconSymbol name="arrow.counterclockwise" size={18} color={ghostText} />
+          <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar ejercicio</Text>
+         </View>
+        </Pressable>
+        <Pressable
+         style={StyleSheet.flatten([styles.ghostButton, styles.controlThird, { borderColor: ghostBorder }])}
+         onPress={skipSet}
+        >
+         <View style={styles.buttonContent}>
+          <IconSymbol name="forward.end.fill" size={18} color={ghostText} />
+          <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Saltar set</Text>
+         </View>
+        </Pressable>
+       </View>
       </>
      )}
     </View>
@@ -345,6 +361,7 @@ const styles = StyleSheet.create({
  controlsRow: { width: "100%", flexDirection: "row", gap: 10 },
  controlFull: { flex: 1 },
  controlThird: { flex: 1 },
+ buttonContent: { flexDirection: "row", alignItems: "center", gap: 8 },
  primaryButton: { padding: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#111" },
  primaryButtonText: { color: "white", fontWeight: "600" },
  secondaryButton: { padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#111" },
