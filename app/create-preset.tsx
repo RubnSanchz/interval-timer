@@ -1,8 +1,12 @@
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { createPreset } from "@/domain/presets/createPreset";
+import { usePresets } from "@/hooks/use-presets";
 
 export default function CreatePresetScreen() {
+  const router = useRouter();
+  const { addPreset } = usePresets();
   const [name, setName] = useState("");
   const [sets, setSets] = useState("5");
   const [exercise, setExercise] = useState("45");
@@ -17,7 +21,8 @@ export default function CreatePresetScreen() {
         restSeconds: Number(rest),
       });
 
-      Alert.alert("Preset creado (en memoria)", JSON.stringify(preset, null, 2));
+      addPreset(preset);
+      router.replace("/(tabs)/presets");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
       Alert.alert("Error", message);

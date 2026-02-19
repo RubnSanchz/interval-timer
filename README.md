@@ -20,6 +20,13 @@ Atajos útiles:
 
 ---
 
+## Estado actual
+
+- Configuración básica de intervalos + ejecución del temporizador.
+- Presets en memoria (persistencia pendiente).
+
+---
+
 ## Funcionalidades
 
 ### MVP (Primera versión)
@@ -80,3 +87,4 @@ Atajos útiles:
 /assets
   /sounds         // sonidos
 /scripts          // scripts de soporte (Expo)
+```
