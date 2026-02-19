@@ -178,6 +178,13 @@ export default function TimerScreen() {
     setPending(null);
   }
 
+  function resetSet() {
+    setPhase("exercise");
+    setRemaining(config.exerciseSeconds);
+    setStatus("running");
+    setPending(null);
+  }
+
   function pauseTimer() {
     if (status === "running") setStatus("paused");
   }
@@ -195,8 +202,9 @@ export default function TimerScreen() {
     setStatus("running");
   }
 
+  const timerTextColor = phase === "prep" ? mutedTextColor : textColor;
   const phaseLabel =
-    phase === "prep" ? "Preparacion" : phase === "exercise" ? "Ejercicio" : phase === "rest" ? "Descanso" : "Completado";
+    phase === "prep" ? "Preparación" : phase === "exercise" ? "Ejercicio" : phase === "rest" ? "Descanso" : "Completado";
 
   return (
     <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
@@ -204,7 +212,7 @@ export default function TimerScreen() {
         <Stack.Screen options={{ title: "Timer" }} />
         <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Intervalo en curso</Text>
         <Text style={StyleSheet.flatten([styles.phase, { color: mutedTextColor }])}>{phaseLabel}</Text>
-        <Text style={StyleSheet.flatten([styles.timer, { color: textColor }])}>{formatTime(remaining)}</Text>
+        <Text style={StyleSheet.flatten([styles.timer, { color: timerTextColor }])}>{formatTime(remaining)}</Text>
         <Text style={StyleSheet.flatten([styles.meta, { color: mutedTextColor }])}>
           Set {Math.min(setIndex, config.sets)} de {config.sets}
         </Text>
@@ -231,21 +239,28 @@ export default function TimerScreen() {
               <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Continuar</Text>
             </Pressable>
           )}
-          <Pressable
-            style={StyleSheet.flatten([
-              status === "done" ? styles.primaryButton : styles.ghostButton,
-              status === "done" ? { backgroundColor: primaryBackground } : { borderColor: ghostBorder },
-            ])}
-            onPress={resetTimer}>
-            <Text
-              style={
-                status === "done"
-                  ? StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])
-                  : StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])
-              }>
-              Reiniciar
-            </Text>
-          </Pressable>
+          {status === "done" ? (
+            <Pressable
+              style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
+              onPress={resetTimer}>
+              <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Reiniciar</Text>
+            </Pressable>
+          ) : (
+            <>
+              <Pressable
+                style={StyleSheet.flatten([styles.ghostButton, { borderColor: ghostBorder }])}
+                onPress={resetSet}>
+                <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar set</Text>
+              </Pressable>
+              <Pressable
+                style={StyleSheet.flatten([styles.ghostButton, { borderColor: ghostBorder }])}
+                onPress={resetTimer}>
+                <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>
+                  Reiniciar ejercicio
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
 
         <Pressable style={styles.backButton} onPress={() => router.back()}>
