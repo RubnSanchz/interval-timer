@@ -14,6 +14,8 @@ export default function PresetsScreen() {
         sets: String(preset.sets),
         exerciseSeconds: String(preset.exerciseSeconds),
         restSeconds: String(preset.restSeconds),
+        exerciseAutoAdvance: preset.exerciseAutoAdvance ? "1" : "0",
+        restAutoAdvance: preset.restAutoAdvance ? "1" : "0",
       },
     });
   }

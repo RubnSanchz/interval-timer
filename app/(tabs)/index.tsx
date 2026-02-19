@@ -15,6 +15,8 @@ export default function ConfigScreen() {
         sets: Number(sets),
         exerciseSeconds: Number(exercise),
         restSeconds: Number(rest),
+        exerciseAutoAdvance: true,
+        restAutoAdvance: true,
       });
 
       router.push({
@@ -23,6 +25,8 @@ export default function ConfigScreen() {
           sets: String(config.sets),
           exerciseSeconds: String(config.exerciseSeconds),
           restSeconds: String(config.restSeconds),
+          exerciseAutoAdvance: config.exerciseAutoAdvance ? "1" : "0",
+          restAutoAdvance: config.restAutoAdvance ? "1" : "0",
         },
       });
     } catch (error) {
