@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Interval Timer",
+    "slug": "interval-timer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "interval-timer",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
