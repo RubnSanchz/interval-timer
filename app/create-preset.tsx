@@ -38,7 +38,13 @@ export default function CreatePresetScreen() {
       <Text style={styles.title}>Crear preset</Text>
 
       <Text style={styles.label}>Nombre</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ej. HIIT 45/15 x4" />
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="Ej. HIIT 45/15 x4"
+        placeholderTextColor="#9aa0a6"
+      />
 
       <Text style={styles.label}>Número de sets</Text>
       <TextInput style={styles.input} value={sets} onChangeText={setSets} keyboardType="number-pad" />
@@ -80,7 +86,15 @@ export default function CreatePresetScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 10, backgroundColor: "white" },
+  container: {
+    flex: 1,
+    padding: 16,
+    gap: 10,
+    backgroundColor: "white",
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+  },
   title: { fontSize: 22, fontWeight: "600", marginBottom: 8 },
   label: { fontSize: 14, fontWeight: "500" },
   row: { flexDirection: "row", gap: 10, alignItems: "center" },

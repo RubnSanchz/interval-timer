@@ -225,7 +225,16 @@ export default function TimerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "white", alignItems: "center", gap: 12 },
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "white",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+  },
   title: { fontSize: 22, fontWeight: "600", marginTop: 12 },
   phase: { fontSize: 18, fontWeight: "500", color: "#444" },
   timer: { fontSize: 52, fontWeight: "700", letterSpacing: 1 },
