@@ -21,6 +21,11 @@ const MAPPING = {
   timer: 'timer',
   'list.bullet': 'format-list-bulleted',
   'gearshape.fill': 'settings',
+  'pause.fill': 'pause',
+  'play.fill': 'play-arrow',
+  'forward.end.fill': 'skip-next',
+  'arrow.counterclockwise': 'refresh',
+  repeat: 'repeat',
 } as IconMapping;
 
 /**
