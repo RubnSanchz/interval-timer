@@ -280,7 +280,9 @@ export default function TimerScreen() {
           onPress={pauseTimer}
           accessibilityLabel="Pausar"
          >
-          <IconSymbol name="pause.fill" size={24} color={secondaryText} style={styles.iconLarge} />
+          <View style={styles.iconOnly}>
+           <IconSymbol name="pause.fill" size={24} color={secondaryText} style={styles.iconLarge} />
+          </View>
          </Pressable>
         )}
         {status === "paused" && (
@@ -289,7 +291,9 @@ export default function TimerScreen() {
           onPress={resumeTimer}
           accessibilityLabel="Reanudar"
          >
-          <IconSymbol name="play.fill" size={24} color={primaryText} style={styles.iconLarge} />
+          <View style={styles.iconOnly}>
+           <IconSymbol name="play.fill" size={24} color={primaryText} style={styles.iconLarge} />
+          </View>
          </Pressable>
         )}
         {status === "holding" && (
@@ -298,48 +302,50 @@ export default function TimerScreen() {
           onPress={continueTimer}
           accessibilityLabel="Continuar"
          >
-          <IconSymbol name="play.fill" size={24} color={primaryText} style={styles.iconLarge} />
+          <View style={styles.iconOnly}>
+           <IconSymbol name="play.fill" size={24} color={primaryText} style={styles.iconLarge} />
+          </View>
          </Pressable>
         )}
        </View>
        <View style={styles.controlsRow}>
-       <Pressable
-        style={StyleSheet.flatten([
-         styles.ghostButton,
-         styles.controlThird,
-         { borderColor: ghostBorder, backgroundColor: ghostBackground },
-        ])}
-        onPress={resetSet}
-       >
-         <View style={styles.buttonContent}>
+        <Pressable
+         style={StyleSheet.flatten([
+          styles.ghostButton,
+          styles.controlThird,
+          { borderColor: ghostBorder, backgroundColor: ghostBackground },
+         ])}
+         onPress={resetSet}
+        >
+         <View style={styles.buttonStack}>
           <IconSymbol name="repeat" size={18} color={ghostText} style={styles.iconSmall} />
           <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar set</Text>
          </View>
         </Pressable>
-       <Pressable
-        style={StyleSheet.flatten([
-         styles.ghostButton,
-         styles.controlThird,
-         { borderColor: ghostBorder, backgroundColor: ghostBackground },
-        ])}
-        onPress={resetTimer}
-       >
-         <View style={styles.buttonContent}>
+        <Pressable
+         style={StyleSheet.flatten([
+          styles.ghostButton,
+          styles.controlThird,
+          { borderColor: ghostBorder, backgroundColor: ghostBackground },
+         ])}
+         onPress={resetTimer}
+        >
+         <View style={styles.buttonStack}>
           <IconSymbol name="arrow.counterclockwise" size={18} color={ghostText} style={styles.iconSmall} />
           <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Reiniciar ejercicio</Text>
          </View>
         </Pressable>
-       <Pressable
-        style={StyleSheet.flatten([
-         styles.ghostButton,
-         styles.controlThird,
-         { borderColor: ghostBorder, backgroundColor: ghostBackground },
-        ])}
-        onPress={skipSet}
-       >
-         <View style={styles.buttonContent}>
-          <IconSymbol name="forward.end.fill" size={18} color={ghostText} style={styles.iconSmall} />
-          <Text style={StyleSheet.flatten([styles.ghostButtonText, { color: ghostText }])}>Saltar set</Text>
+        <Pressable
+         style={StyleSheet.flatten([
+          styles.ghostButton,
+          styles.controlThird,
+          { borderColor: ghostBorder, backgroundColor: ghostBackground },
+         ])}
+         onPress={skipSet}
+         accessibilityLabel="Saltar set"
+        >
+         <View style={styles.iconOnly}>
+          <IconSymbol name="forward.end.fill" size={20} color={ghostText} style={styles.iconSmall} />
          </View>
         </Pressable>
        </View>
@@ -366,11 +372,11 @@ const styles = StyleSheet.create({
   maxWidth: 520,
   alignSelf: "center",
  },
- title: { fontSize: 22, fontWeight: "600", marginTop: 12 },
- phase: { fontSize: 18, fontWeight: "500", color: "#444" },
- timer: { fontSize: 52, fontWeight: "700", letterSpacing: 1 },
- meta: { fontSize: 14, color: "#666" },
- controls: { width: "100%", gap: 10, marginTop: 10 },
+ title: { fontSize: 20, fontWeight: "600", letterSpacing: 0.2, marginTop: 12 },
+ phase: { fontSize: 16, fontWeight: "600", letterSpacing: 0.4, color: "#444" },
+ timer: { fontSize: 60, fontWeight: "700", letterSpacing: 1.5 },
+ meta: { fontSize: 12, letterSpacing: 0.2, color: "#666" },
+ controls: { width: "100%", gap: 12, marginTop: 14 },
  controlsRow: { width: "100%", flexDirection: "row", gap: 10 },
  controlFull: { flex: 1 },
  controlThird: { flex: 1 },
@@ -382,6 +388,15 @@ const styles = StyleSheet.create({
   width: "100%",
   gap: 8,
  },
+ buttonStack: {
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "100%",
+  width: "100%",
+  gap: 6,
+ },
+ iconOnly: { alignItems: "center", justifyContent: "center", height: "100%", width: "100%" },
  iconLarge: { lineHeight: 24, textAlignVertical: "center" },
  iconSmall: { lineHeight: 18, textAlignVertical: "center" },
  primaryButton: {
@@ -415,7 +430,7 @@ const styles = StyleSheet.create({
   borderWidth: 1,
   borderColor: "#bbb",
  },
- ghostButtonText: { color: "#444", fontWeight: "600", fontSize: 13, lineHeight: 16, textAlign: "center" },
+ ghostButtonText: { color: "#444", fontWeight: "600", fontSize: 12, lineHeight: 14, textAlign: "center" },
  backButton: { marginTop: "auto", padding: 12 },
  backButtonText: { color: "#111", fontWeight: "600" },
  errorContainer: { flex: 1, padding: 20, alignItems: "center", justifyContent: "center", gap: 12 },
