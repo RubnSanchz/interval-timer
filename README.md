@@ -6,9 +6,33 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
 
 ---
 
+## Inicio rápido
+
+```bash
+npm install
+npm run start
+```
+
+Atajos útiles:
+- `npm run android`
+- `npm run ios`
+- `npm run web`
+
+Guia para generar e instalar APK: `docs/GUIA_APK.md`
+
+---
+
+## Estado actual
+
+- Configuración básica de intervalos + ejecución del temporizador.
+- Presets en memoria (persistencia pendiente).
+
+---
+
 ## Funcionalidades
 
 ### MVP (Primera versión)
+
 - Configuración de temporizador:
   - Tiempo de ejercicio (segundos)
   - Tiempo de descanso (segundos)
@@ -23,6 +47,7 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
   - Sonido B al terminar descanso (inicio ejercicio o fin total)
 
 ### Fase 2 (Después del MVP)
+
 - Presets:
   - Guardar preset (nombre + configuración)
   - Listar presets
@@ -33,37 +58,35 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
   - Contador “3, 2, 1” antes de empezar (opcional)
 
 ### Fase 3 (Opcional)
+
 - Historial de entrenos
 - Personalización de sonidos
 - Notificaciones/controles en segundo plano
 
 ---
 
-## Stack propuesto
+## Stack actual
 
-**Opción recomendada (por experiencia previa en JS):**
-- React Native + Expo
-- Persistencia: AsyncStorage (presets)
-- Audio: expo-av (sonidos)
-
-> Si se prefiere Android nativo (Kotlin + Jetpack Compose), se puede replantear el stack.
+- React Native + Expo (Expo Router)
+- Persistencia: AsyncStorage (presets, pendiente)
+- Audio: expo-av (sonidos, pendiente)
 
 ---
 
-## Estructura inicial (tentativa)
+## Estructura actual
 
-/src
-/components
-TimerDisplay.tsx
-PresetList.tsx
-/screens
-SetupScreen.tsx
-TimerScreen.tsx
-PresetsScreen.tsx
-/services
-timerEngine.ts
-presetsStorage.ts
-sound.ts
-/models
-Preset.ts
-App.tsx
+```text
+/app              // navegación/pantallas (Expo Router)
+/components       // componentes UI reutilizables
+/constants        // tema, constantes
+/hooks            // hooks de UI
+/domain
+  /models         // tipos/entidades del dominio (Preset, TimerState...)
+  /validators     // validaciones del dominio
+  /presets        // creación de presets
+/services         // persistencia, timer, etc.
+/utils            // helpers genéricos (formateo, ids, etc.)
+/assets
+  /sounds         // sonidos
+/scripts          // scripts de soporte (Expo)
+```
