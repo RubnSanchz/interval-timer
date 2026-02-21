@@ -1,66 +1,94 @@
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Platform } from "react-native";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 type FeedbackKind = "phase" | "hold" | "complete";
+type BeepKind = "short" | "long";
 
-const BEEP_SOUND = require("../assets/sounds/beep.wav");
+const SHORT_BEEP = require("../assets/sounds/beep-short.wav");
+const LONG_BEEP = require("../assets/sounds/beep-long.wav");
+const VOLUME_GAMMA = 1.6;
+
+type SoundRefs = {
+  short: Audio.Sound | null;
+  long: Audio.Sound | null;
+};
+
+function clampVolume(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
+function scaleVolume(value: number) {
+  const clamped = clampVolume(value);
+  if (clamped <= 0) return 0;
+  return Math.min(1, Math.pow(clamped, VOLUME_GAMMA));
+}
 
 export function useFeedback() {
   const { hapticsEnabled, soundVolume } = useAppSettings();
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRefs = useRef<SoundRefs>({ short: null, long: null });
+  const effectiveVolume = useMemo(() => scaleVolume(soundVolume), [soundVolume]);
+  const initialVolume = useRef(effectiveVolume);
 
   useEffect(() => {
     let isActive = true;
-    async function loadSound() {
+    async function loadSound(kind: BeepKind, asset: number) {
       try {
-        const { sound } = await Audio.Sound.createAsync(BEEP_SOUND, {
-          volume: soundVolume,
+        const { sound } = await Audio.Sound.createAsync(asset, {
+          volume: initialVolume.current,
           shouldPlay: false,
         });
         if (!isActive) {
           await sound.unloadAsync();
           return;
         }
-        soundRef.current = sound;
+        soundRefs.current[kind] = sound;
       } catch {
       }
     }
-    loadSound();
+    loadSound("short", SHORT_BEEP);
+    loadSound("long", LONG_BEEP);
     return () => {
       isActive = false;
-      const sound = soundRef.current;
-      soundRef.current = null;
-      sound?.unloadAsync().catch(() => {});
+      const current = soundRefs.current;
+      soundRefs.current = { short: null, long: null };
+      current.short?.unloadAsync().catch(() => {});
+      current.long?.unloadAsync().catch(() => {});
     };
   }, []);
 
   useEffect(() => {
-    if (!soundRef.current) return;
-    soundRef.current.setVolumeAsync(soundVolume).catch(() => {});
-  }, [soundVolume]);
+    const current = soundRefs.current;
+    current.short?.setVolumeAsync(effectiveVolume).catch(() => {});
+    current.long?.setVolumeAsync(effectiveVolume).catch(() => {});
+  }, [effectiveVolume]);
 
-  const playSound = useCallback(async () => {
-    if (soundVolume <= 0) return;
-    const sound = soundRef.current;
-    if (!sound) {
+  const playBeep = useCallback(
+    async (kind: BeepKind) => {
+      if (effectiveVolume <= 0) return;
+      const sound = soundRefs.current[kind];
+      if (!sound) {
+        try {
+          const asset = kind === "short" ? SHORT_BEEP : LONG_BEEP;
+          const { sound: newSound } = await Audio.Sound.createAsync(asset, {
+            volume: effectiveVolume,
+            shouldPlay: true,
+          });
+          soundRefs.current[kind] = newSound;
+        } catch {
+        }
+        return;
+      }
       try {
-        const { sound: newSound } = await Audio.Sound.createAsync(BEEP_SOUND, {
-          volume: soundVolume,
-          shouldPlay: true,
-        });
-        soundRef.current = newSound;
+        await sound.replayAsync();
       } catch {
       }
-      return;
-    }
-    try {
-      await sound.replayAsync();
-    } catch {
-    }
-  }, [soundVolume]);
+    },
+    [effectiveVolume]
+  );
 
   const triggerHaptics = useCallback(
     async (kind: FeedbackKind) => {
@@ -85,10 +113,9 @@ export function useFeedback() {
   const triggerFeedback = useCallback(
     (kind: FeedbackKind) => {
       void triggerHaptics(kind);
-      void playSound();
     },
-    [playSound, triggerHaptics]
+    [triggerHaptics]
   );
 
-  return { triggerFeedback };
+  return { triggerFeedback, playBeep };
 }

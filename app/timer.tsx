@@ -25,7 +25,7 @@ export default function TimerScreen() {
  const ghostBorder = useThemeColor({ light: "#bbb", dark: "#333" }, "text");
  const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
  const ghostBackground = useThemeColor({ light: "#F3F4F6", dark: "#1E2023" }, "background");
- const { triggerFeedback } = useFeedback();
+ const { triggerFeedback, playBeep } = useFeedback();
  const params = useLocalSearchParams<{
   sets?: string | string[];
   exerciseSeconds?: string | string[];
@@ -83,6 +83,8 @@ export default function TimerScreen() {
  const [pending, setPending] = useState<PendingTransition | null>(null);
  const previousPhase = useRef<Phase>(phase);
  const previousStatus = useRef<Status>(status);
+ const lastBeepKey = useRef<string | null>(null);
+ const previousRemaining = useRef<number>(remaining);
 
  useEffect(() => {
   setPhase(PREP_SECONDS > 0 ? "prep" : "exercise");
@@ -114,6 +116,34 @@ export default function TimerScreen() {
    previousStatus.current = status;
   }
  }, [status, triggerFeedback]);
+
+ useEffect(() => {
+  if (remaining > previousRemaining.current) {
+   lastBeepKey.current = null;
+  }
+  previousRemaining.current = remaining;
+ }, [remaining]);
+
+ useEffect(() => {
+  if (phase === "prep" || phase === "done") return;
+  if (status === "paused") return;
+
+  let beepKind: "short" | "long" | null = null;
+  if (phase === "rest" && (remaining === 2 || remaining === 1 || remaining === 0)) {
+   beepKind = "short";
+  } else if (phase === "exercise") {
+   if (remaining === 2 || remaining === 1) beepKind = "short";
+   if (remaining === 0) beepKind = "long";
+  }
+
+  if (!beepKind) return;
+  if (remaining > 0 && status !== "running") return;
+
+  const key = `${phase}:${remaining}:${beepKind}`;
+  if (lastBeepKey.current === key) return;
+  lastBeepKey.current = key;
+  playBeep(beepKind);
+ }, [phase, remaining, status, playBeep]);
 
  useEffect(() => {
   if (status !== "running") return;
