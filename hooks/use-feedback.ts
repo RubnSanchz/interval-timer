@@ -1,4 +1,4 @@
-import { Audio } from "expo-av";
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Vibration } from "react-native";
@@ -44,8 +44,8 @@ export function useFeedback() {
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         });
       } catch {
       }
@@ -102,7 +102,10 @@ export function useFeedback() {
       if (Platform.OS === "web") return;
       const vibrateFallback = () => {
         if (Platform.OS !== "android") return;
-        Vibration.vibrate(kind === "long" ? 60 : 30);
+        try {
+          Vibration.vibrate(kind === "long" ? 60 : 30);
+        } catch {
+        }
       };
       if (hapticsAvailable === false) {
         vibrateFallback();
@@ -152,7 +155,10 @@ export function useFeedback() {
       if (Platform.OS === "web") return;
       const vibrateFallback = () => {
         if (Platform.OS !== "android") return;
-        Vibration.vibrate(kind === "complete" ? 80 : 40);
+        try {
+          Vibration.vibrate(kind === "complete" ? 80 : 40);
+        } catch {
+        }
       };
       if (hapticsAvailable === false) {
         vibrateFallback();
