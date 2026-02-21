@@ -1,3 +1,4 @@
+import Slider from "@react-native-community/slider";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useAppTheme, type ThemePreference } from "@/hooks/use-app-theme";
@@ -14,11 +15,11 @@ const VIBRATION_OPTIONS: { value: boolean; title: string; description: string }[
   { value: false, title: "Desactivada", description: "Sin vibracion" },
 ];
 
-const SOUND_LEVELS: { value: number; title: string; description: string }[] = [
-  { value: 0, title: "Silencio", description: "Sin sonido" },
-  { value: 0.3, title: "Bajo", description: "Suave" },
-  { value: 0.6, title: "Medio", description: "Balanceado" },
-  { value: 1, title: "Alto", description: "Maximo" },
+const SOUND_LEVELS: { value: number; title: string }[] = [
+  { value: 0, title: "Silencio" },
+  { value: 0.3, title: "Bajo" },
+  { value: 0.6, title: "Medio" },
+  { value: 1, title: "Alto" },
 ];
 
 export default function SettingsScreen() {
@@ -31,6 +32,10 @@ export default function SettingsScreen() {
   const cardBackground = useThemeColor({ light: "white", dark: "#1c1d1f" }, "background");
   const selectedBackground = useThemeColor({ light: "#f3f4f6", dark: "#232527" }, "background");
   const tintColor = useThemeColor({}, "tint");
+  const sliderTrack = useThemeColor({ light: "#d8dadd", dark: "#3a3c3f" }, "text");
+  const rawSoundIndex = SOUND_LEVELS.findIndex((level) => Math.abs(soundVolume - level.value) < 0.05);
+  const activeSoundIndex = rawSoundIndex >= 0 ? rawSoundIndex : 2;
+  const soundLabel = SOUND_LEVELS[activeSoundIndex]?.title ?? "Medio";
 
   return (
     <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
@@ -110,39 +115,34 @@ export default function SettingsScreen() {
         </View>
 
         <Text style={StyleSheet.flatten([styles.subTitle, { color: mutedTextColor }])}>Sonido</Text>
-
-        <View style={styles.options}>
-          {SOUND_LEVELS.map((level) => {
-            const selected = Math.abs(soundVolume - level.value) < 0.05;
-            return (
-              <Pressable
+        <View
+          style={StyleSheet.flatten([styles.sliderCard, { borderColor, backgroundColor: cardBackground }])}>
+          <View style={styles.sliderHeader}>
+            <Text style={StyleSheet.flatten([styles.sliderTitle, { color: textColor }])}>Nivel</Text>
+            <Text style={StyleSheet.flatten([styles.sliderValue, { color: mutedTextColor }])}>{soundLabel}</Text>
+          </View>
+          <Slider
+            minimumValue={0}
+            maximumValue={SOUND_LEVELS.length - 1}
+            step={1}
+            value={activeSoundIndex}
+            onValueChange={(value) => {
+              const index = Math.max(0, Math.min(SOUND_LEVELS.length - 1, Math.round(value)));
+              setSoundVolume(SOUND_LEVELS[index].value);
+            }}
+            minimumTrackTintColor={tintColor}
+            maximumTrackTintColor={sliderTrack}
+            thumbTintColor={tintColor}
+          />
+          <View style={styles.sliderLabels}>
+            {SOUND_LEVELS.map((level) => (
+              <Text
                 key={level.value}
-                style={StyleSheet.flatten([
-                  styles.option,
-                  {
-                    borderColor,
-                    backgroundColor: selected ? selectedBackground : cardBackground,
-                  },
-                ])}
-                onPress={() => setSoundVolume(level.value)}>
-                <View style={styles.optionText}>
-                  <Text style={StyleSheet.flatten([styles.optionTitle, { color: textColor }])}>{level.title}</Text>
-                  <Text style={StyleSheet.flatten([styles.optionDescription, { color: mutedTextColor }])}>
-                    {level.description}
-                  </Text>
-                </View>
-                <View
-                  style={StyleSheet.flatten([
-                    styles.radio,
-                    {
-                      borderColor: selected ? tintColor : borderColor,
-                      backgroundColor: selected ? tintColor : "transparent",
-                    },
-                  ])}
-                />
-              </Pressable>
-            );
-          })}
+                style={StyleSheet.flatten([styles.sliderLabel, { color: mutedTextColor }])}>
+                {level.title}
+              </Text>
+            ))}
+          </View>
         </View>
       </View>
     </View>
@@ -169,4 +169,10 @@ const styles = StyleSheet.create({
   optionTitle: { fontSize: 15, fontWeight: "600" },
   optionDescription: { fontSize: 13 },
   radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
+  sliderCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 },
+  sliderHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sliderTitle: { fontSize: 14, fontWeight: "600" },
+  sliderValue: { fontSize: 13, fontWeight: "600" },
+  sliderLabels: { flexDirection: "row", justifyContent: "space-between" },
+  sliderLabel: { fontSize: 11 },
 });
