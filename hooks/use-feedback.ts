@@ -1,7 +1,7 @@
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Platform, Vibration } from "react-native";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 type FeedbackKind = "phase" | "hold" | "complete";
@@ -32,6 +32,36 @@ export function useFeedback() {
   const soundRefs = useRef<SoundRefs>({ short: null, long: null });
   const effectiveVolume = useMemo(() => scaleVolume(soundVolume), [soundVolume]);
   const initialVolume = useRef(effectiveVolume);
+  const [hapticsAvailable, setHapticsAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    async function configureAudio() {
+      try {
+        await Audio.setIsEnabledAsync(true);
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        });
+      } catch {
+      }
+    }
+    configureAudio();
+    Haptics.isAvailableAsync()
+      .then((available) => {
+        if (isActive) setHapticsAvailable(available);
+      })
+      .catch(() => {
+        if (isActive) setHapticsAvailable(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -70,6 +100,14 @@ export function useFeedback() {
     async (kind: BeepKind) => {
       if (!hapticsEnabled) return;
       if (Platform.OS === "web") return;
+      const vibrateFallback = () => {
+        if (Platform.OS !== "android") return;
+        Vibration.vibrate(kind === "long" ? 60 : 30);
+      };
+      if (hapticsAvailable === false) {
+        vibrateFallback();
+        return;
+      }
       try {
         if (kind === "long") {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -77,9 +115,10 @@ export function useFeedback() {
         }
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {
+        vibrateFallback();
       }
     },
-    [hapticsEnabled]
+    [hapticsEnabled, hapticsAvailable]
   );
 
   const playBeep = useCallback(
@@ -111,6 +150,14 @@ export function useFeedback() {
     async (kind: FeedbackKind) => {
       if (!hapticsEnabled) return;
       if (Platform.OS === "web") return;
+      const vibrateFallback = () => {
+        if (Platform.OS !== "android") return;
+        Vibration.vibrate(kind === "complete" ? 80 : 40);
+      };
+      if (hapticsAvailable === false) {
+        vibrateFallback();
+        return;
+      }
       try {
         if (kind === "complete") {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -122,9 +169,10 @@ export function useFeedback() {
         }
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {
+        vibrateFallback();
       }
     },
-    [hapticsEnabled]
+    [hapticsEnabled, hapticsAvailable]
   );
 
   const triggerFeedback = useCallback(

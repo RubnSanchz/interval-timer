@@ -1,4 +1,5 @@
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { createPreset } from "@/domain/presets/createPreset";
@@ -43,7 +44,7 @@ export default function CreatePresetScreen() {
   }
 
   return (
-    <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
+    <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top"]}>
       <View style={styles.container}>
         <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Crear preset</Text>
 
@@ -136,7 +137,7 @@ export default function CreatePresetScreen() {
           <Text style={StyleSheet.flatten([styles.buttonText, { color: primaryText }])}>Crear</Text>
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

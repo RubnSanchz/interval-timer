@@ -3,6 +3,7 @@ import { useAppTheme, type ThemePreference } from "@/hooks/use-app-theme";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import Slider from "@react-native-community/slider";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const OPTIONS: { value: ThemePreference; title: string; description: string }[] = [
  { value: "system", title: "Sistema", description: "Usa el tema del dispositivo" },
@@ -36,7 +37,7 @@ export default function SettingsScreen() {
  const soundLabel = SOUND_LEVELS[activeSoundIndex]?.title ?? "Medio";
 
  return (
-  <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
+  <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top"]}>
    <View style={styles.container}>
     <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Ajustes</Text>
     <Text style={StyleSheet.flatten([styles.sectionTitle, { color: textColor }])}>Tema</Text>
@@ -159,7 +160,7 @@ export default function SettingsScreen() {
      </View>
     </View>
    </View>
-  </View>
+  </SafeAreaView>
  );
 }
 

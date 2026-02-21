@@ -8,6 +8,7 @@ import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const PREP_SECONDS = 5;
 
@@ -294,10 +295,10 @@ export default function TimerScreen() {
 
  const timerTextColor = phase === "prep" ? mutedTextColor : textColor;
  const phaseLabel =
-  phase === "prep" ? "Preparacion" : phase === "exercise" ? "Ejercicio" : phase === "rest" ? "Descanso" : "Completado";
+  phase === "prep" ? "Preparación" : phase === "exercise" ? "Ejercicio" : phase === "rest" ? "Descanso" : "Completado";
 
  return (
-  <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
+  <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top", "bottom"]}>
    <View style={styles.container}>
     <Stack.Screen options={{ title: "Timer" }} />
     <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Intervalo en curso</Text>
@@ -404,7 +405,7 @@ export default function TimerScreen() {
      <Text style={StyleSheet.flatten([styles.backButtonText, { color: textColor }])}>Volver</Text>
     </Pressable>
    </View>
-  </View>
+  </SafeAreaView>
  );
 }
 
@@ -431,19 +432,15 @@ const styles = StyleSheet.create({
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "center",
-  height: "100%",
-  width: "100%",
   gap: 8,
  },
  buttonStack: {
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  height: "100%",
-  width: "100%",
   gap: 6,
  },
- iconOnly: { alignItems: "center", justifyContent: "center", height: "100%", width: "100%" },
+ iconOnly: { alignItems: "center", justifyContent: "center" },
  iconLarge: { lineHeight: 24, textAlignVertical: "center" },
  iconSmall: { lineHeight: 18, textAlignVertical: "center" },
  primaryButton: {
