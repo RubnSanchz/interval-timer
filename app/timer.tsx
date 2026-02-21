@@ -1,8 +1,10 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { formatTime } from "@/utils/formatTime";
+import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -26,6 +28,7 @@ export default function TimerScreen() {
  const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
  const ghostBackground = useThemeColor({ light: "#F3F4F6", dark: "#1E2023" }, "background");
  const { playBeep } = useFeedback();
+ const { keepAwakeEnabled } = useAppSettings();
  const params = useLocalSearchParams<{
   sets?: string | string[];
   exerciseSeconds?: string | string[];
@@ -99,6 +102,18 @@ export default function TimerScreen() {
   }, 1000);
   return () => clearInterval(interval);
  }, [status]);
+
+ useEffect(() => {
+  const shouldKeepAwake = keepAwakeEnabled && (status === "running" || status === "holding");
+  if (shouldKeepAwake) {
+   activateKeepAwake("interval-timer");
+  } else {
+   deactivateKeepAwake("interval-timer");
+  }
+  return () => {
+   deactivateKeepAwake("interval-timer");
+  };
+ }, [keepAwakeEnabled, status]);
 
  useEffect(() => {
   if (remaining > previousRemaining.current) {
