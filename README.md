@@ -6,6 +6,27 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
 
 ---
 
+## Inicio rápido
+
+```bash
+npm install
+npm run start
+```
+
+Atajos útiles:
+- `npm run android`
+- `npm run ios`
+- `npm run web`
+
+---
+
+## Estado actual
+
+- Configuración básica de intervalos + ejecución del temporizador.
+- Presets en memoria (persistencia pendiente).
+
+---
+
 ## Funcionalidades
 
 ### MVP (Primera versión)
@@ -42,32 +63,28 @@ Aplicación Android de temporizador por intervalos para entrenamiento. Permite c
 
 ---
 
-## Stack propuesto
+## Stack actual
 
-**Opción recomendada (por experiencia previa en JS):**
-
-- React Native + Expo
-- Persistencia: AsyncStorage (presets)
-- Audio: expo-av (sonidos)
-
-> Valorar Android nativo (Kotlin + Jetpack Compose)
+- React Native + Expo (Expo Router)
+- Persistencia: AsyncStorage (presets, pendiente)
+- Audio: expo-av (sonidos, pendiente)
 
 ---
 
-## Estructura inicial (tentativa)
+## Estructura actual
 
 ```text
-/src
-  /app            // navegación/pantallas (si usa Expo Router) o "screens"
-  /screens        // si NO uso Expo Router, aquí van las pantallas
-  /components     // componentes UI reutilizables (botones, inputs, etc.)
-  /domain
-    /models       // tipos/entidades del dominio (Preset, TimerState...)
-    /validators   // validaciones del dominio
-  /services
-    storage.ts    // persistencia (AsyncStorage)
-    timer.ts      // lógica del temporizador
-  /utils          // helpers genéricos (formateo mm:ss, etc.)
+/app              // navegación/pantallas (Expo Router)
+/components       // componentes UI reutilizables
+/constants        // tema, constantes
+/hooks            // hooks de UI
+/domain
+  /models         // tipos/entidades del dominio (Preset, TimerState...)
+  /validators     // validaciones del dominio
+  /presets        // creación de presets
+/services         // persistencia, timer, etc.
+/utils            // helpers genéricos (formateo, ids, etc.)
 /assets
   /sounds         // sonidos
-
+/scripts          // scripts de soporte (Expo)
+```
