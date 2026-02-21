@@ -38,6 +38,7 @@ export function useFeedback() {
     let isActive = true;
     async function configureAudio() {
       try {
+        if (Platform.OS === "web") return;
         await Audio.setIsEnabledAsync(true);
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
@@ -51,13 +52,19 @@ export function useFeedback() {
       }
     }
     configureAudio();
-    Haptics.isAvailableAsync()
-      .then((available) => {
-        if (isActive) setHapticsAvailable(available);
-      })
-      .catch(() => {
+    const checkAvailability = async () => {
+      if (Platform.OS === "web" || typeof Haptics.isAvailableAsync !== "function") {
         if (isActive) setHapticsAvailable(false);
-      });
+        return;
+      }
+      try {
+        const available = await Haptics.isAvailableAsync();
+        if (isActive) setHapticsAvailable(available);
+      } catch {
+        if (isActive) setHapticsAvailable(false);
+      }
+    };
+    checkAvailability();
     return () => {
       isActive = false;
     };
