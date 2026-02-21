@@ -66,8 +66,25 @@ export function useFeedback() {
     current.long?.setVolumeAsync(effectiveVolume).catch(() => {});
   }, [effectiveVolume]);
 
+  const triggerBeepHaptics = useCallback(
+    async (kind: BeepKind) => {
+      if (!hapticsEnabled) return;
+      if (Platform.OS === "web") return;
+      try {
+        if (kind === "long") {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          return;
+        }
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {
+      }
+    },
+    [hapticsEnabled]
+  );
+
   const playBeep = useCallback(
     async (kind: BeepKind) => {
+      void triggerBeepHaptics(kind);
       if (effectiveVolume <= 0) return;
       const sound = soundRefs.current[kind];
       if (!sound) {
@@ -87,7 +104,7 @@ export function useFeedback() {
       } catch {
       }
     },
-    [effectiveVolume]
+    [effectiveVolume, triggerBeepHaptics]
   );
 
   const triggerHaptics = useCallback(
