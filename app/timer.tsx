@@ -1,13 +1,24 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import type { TimerConfig } from "@/domain/models/TimerConfig";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useThemeColor } from "@/hooks/use-theme-color";
+import {
+ clearTimerNotifications,
+ isTimerNotificationResponse,
+ prepareTimerNotifications,
+ scheduleTimerNotifications as scheduleBackgroundTimerNotifications,
+ TIMER_NOTIFICATION_ACTIONS,
+ type TimerNotificationState,
+} from "@/services/timer-notifications";
 import { formatTime } from "@/utils/formatTime";
+import * as Notifications from "expo-notifications";
 import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
+import type { AppStateStatus } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PREP_SECONDS = 5;
@@ -15,6 +26,96 @@ const PREP_SECONDS = 5;
 type Phase = "prep" | "exercise" | "rest" | "done";
 type Status = "running" | "paused" | "holding" | "done";
 type PendingTransition = { phase: "exercise" | "rest"; setIndex: number; remaining: number };
+type TimerSnapshot = TimerNotificationState;
+
+function advanceTimerBySeconds(snapshot: TimerSnapshot, config: TimerConfig, elapsedSeconds: number): TimerSnapshot {
+ if (elapsedSeconds <= 0) return snapshot;
+ if (snapshot.status !== "running") return snapshot;
+
+ let { phase, setIndex, remaining } = snapshot;
+ let status: Status = snapshot.status;
+ let pending: PendingTransition | null = snapshot.pending;
+ let secondsLeft = elapsedSeconds;
+
+ if (pending) pending = null;
+ if (remaining < 0) remaining = 0;
+
+ while (secondsLeft > 0 && status === "running") {
+  if (remaining > 0) {
+   if (secondsLeft < remaining) {
+    remaining -= secondsLeft;
+    secondsLeft = 0;
+    break;
+   }
+   secondsLeft -= remaining;
+   remaining = 0;
+   if (secondsLeft === 0) break;
+  }
+
+  if (phase === "prep") {
+   phase = "exercise";
+   remaining = config.exerciseSeconds;
+   continue;
+  }
+
+  if (phase === "exercise") {
+   if (setIndex >= config.sets) {
+    phase = "done";
+    status = "done";
+    pending = null;
+    remaining = 0;
+    break;
+   }
+
+   const nextPhase =
+    config.restSeconds > 0
+     ? { phase: "rest" as const, setIndex, remaining: config.restSeconds }
+     : { phase: "exercise" as const, setIndex: setIndex + 1, remaining: config.exerciseSeconds };
+
+   if (config.exerciseAutoAdvance) {
+    phase = nextPhase.phase;
+    setIndex = nextPhase.setIndex;
+    remaining = nextPhase.remaining;
+    continue;
+   }
+
+   pending = nextPhase;
+   status = "holding";
+   break;
+  }
+
+  if (phase === "rest") {
+   const nextSet = setIndex + 1;
+   if (nextSet > config.sets) {
+    phase = "done";
+    status = "done";
+    pending = null;
+    remaining = 0;
+    break;
+   }
+
+   const nextPhase = { phase: "exercise" as const, setIndex: nextSet, remaining: config.exerciseSeconds };
+   if (config.restAutoAdvance) {
+    phase = nextPhase.phase;
+    setIndex = nextPhase.setIndex;
+    remaining = nextPhase.remaining;
+    continue;
+   }
+
+   pending = nextPhase;
+   status = "holding";
+   break;
+  }
+
+  phase = "done";
+  status = "done";
+  pending = null;
+  remaining = 0;
+  break;
+ }
+
+ return { phase, setIndex, remaining, status, pending };
+}
 
 export default function TimerScreen() {
  const router = useRouter();
@@ -87,6 +188,97 @@ export default function TimerScreen() {
  const [pending, setPending] = useState<PendingTransition | null>(null);
  const lastBeepKey = useRef<string | null>(null);
  const previousRemaining = useRef<number>(remaining);
+ const timerStateRef = useRef<TimerSnapshot>({ phase, setIndex, remaining, status, pending });
+ const lastTickAtRef = useRef<number | null>(null);
+ const configRef = useRef(config);
+ const notificationsEnabledRef = useRef(false);
+ const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+ const scheduledNotificationIdsRef = useRef<string[]>([]);
+ const statusNotificationIdRef = useRef<string | null>(null);
+ const pauseTimerRef = useRef<() => void>(() => {});
+ const skipSetRef = useRef<() => void>(() => {});
+
+ const resetTickClock = useCallback(() => {
+  lastTickAtRef.current = Date.now();
+ }, []);
+
+ const cancelBackgroundNotifications = useCallback(async () => {
+  const scheduledIds = scheduledNotificationIdsRef.current;
+  const statusId = statusNotificationIdRef.current;
+  if (scheduledIds.length === 0 && !statusId) return;
+  await clearTimerNotifications(scheduledIds, statusId);
+  scheduledNotificationIdsRef.current = [];
+  statusNotificationIdRef.current = null;
+ }, []);
+
+ const scheduleBackgroundNotifications = useCallback(async () => {
+  if (!notificationsEnabledRef.current) return;
+  if (appStateRef.current === "active") return;
+  const snapshot = timerStateRef.current;
+  if (snapshot.status !== "running") return;
+  await cancelBackgroundNotifications();
+  const configValue = configRef.current;
+  if (!configValue) return;
+  const result = await scheduleBackgroundTimerNotifications({ config: configValue, snapshot });
+  scheduledNotificationIdsRef.current = result.scheduledIds;
+  statusNotificationIdRef.current = result.statusNotificationId;
+ }, [cancelBackgroundNotifications]);
+
+ useEffect(() => {
+  timerStateRef.current = { phase, setIndex, remaining, status, pending };
+ }, [phase, setIndex, remaining, status, pending]);
+
+ useEffect(() => {
+  configRef.current = config;
+ }, [config]);
+
+ useEffect(() => {
+  let isActive = true;
+  prepareTimerNotifications()
+   .then((enabled) => {
+    if (isActive) notificationsEnabledRef.current = enabled;
+   })
+   .catch(() => {
+    if (isActive) notificationsEnabledRef.current = false;
+   });
+  return () => {
+   isActive = false;
+  };
+ }, []);
+
+ useEffect(() => {
+  const subscription = AppState.addEventListener("change", (nextState) => {
+   const previousState = appStateRef.current;
+   appStateRef.current = nextState;
+   if (nextState === "active") {
+    void cancelBackgroundNotifications();
+    return;
+   }
+   if (previousState === "active") {
+    void scheduleBackgroundNotifications();
+   }
+  });
+  return () => subscription.remove();
+ }, [cancelBackgroundNotifications, scheduleBackgroundNotifications]);
+
+ useEffect(() => {
+  if (status === "running") return;
+  void cancelBackgroundNotifications();
+ }, [status, cancelBackgroundNotifications]);
+
+ useEffect(() => {
+  return () => {
+   void cancelBackgroundNotifications();
+  };
+ }, [cancelBackgroundNotifications]);
+
+ useEffect(() => {
+  if (status === "running") {
+   if (!lastTickAtRef.current) lastTickAtRef.current = Date.now();
+   return;
+  }
+  lastTickAtRef.current = null;
+ }, [status]);
 
  useEffect(() => {
   setPhase(PREP_SECONDS > 0 ? "prep" : "exercise");
@@ -94,15 +286,49 @@ export default function TimerScreen() {
   setRemaining(PREP_SECONDS > 0 ? PREP_SECONDS : config.exerciseSeconds);
   setStatus("running");
   setPending(null);
- }, [config.exerciseSeconds, config.restSeconds, config.sets, config.exerciseAutoAdvance, config.restAutoAdvance]);
+  resetTickClock();
+ }, [
+  config.exerciseSeconds,
+  config.restSeconds,
+  config.sets,
+  config.exerciseAutoAdvance,
+  config.restAutoAdvance,
+  resetTickClock,
+ ]);
 
  useEffect(() => {
   if (status !== "running") return;
   const interval = setInterval(() => {
-   setRemaining((current) => (current > 0 ? current - 1 : 0));
+   const current = timerStateRef.current;
+   if (current.status !== "running") return;
+   const now = Date.now();
+   const lastTickAt = lastTickAtRef.current ?? now;
+   const elapsedMs = now - lastTickAt;
+   if (elapsedMs < 0) {
+    lastTickAtRef.current = now;
+    return;
+   }
+   if (elapsedMs < 1000) return;
+   const elapsedSeconds = Math.floor(elapsedMs / 1000);
+   lastTickAtRef.current = lastTickAt + elapsedSeconds * 1000;
+   const nextState = advanceTimerBySeconds(current, config, elapsedSeconds);
+   if (
+    nextState.phase === current.phase &&
+    nextState.setIndex === current.setIndex &&
+    nextState.remaining === current.remaining &&
+    nextState.status === current.status &&
+    nextState.pending === current.pending
+   ) {
+    return;
+   }
+   setPhase(nextState.phase);
+   setSetIndex(nextState.setIndex);
+   setRemaining(nextState.remaining);
+   setStatus(nextState.status);
+   setPending(nextState.pending);
   }, 1000);
   return () => clearInterval(interval);
- }, [status]);
+ }, [config, status]);
 
  useEffect(() => {
   const shouldKeepAwake = keepAwakeEnabled && (status === "running" || status === "holding");
@@ -215,6 +441,7 @@ export default function TimerScreen() {
   setRemaining(PREP_SECONDS > 0 ? PREP_SECONDS : config.exerciseSeconds);
   setStatus("running");
   setPending(null);
+  resetTickClock();
  }
 
  function resetSet() {
@@ -222,6 +449,7 @@ export default function TimerScreen() {
   setRemaining(config.exerciseSeconds);
   setStatus("running");
   setPending(null);
+  resetTickClock();
  }
 
  function skipSet() {
@@ -233,6 +461,7 @@ export default function TimerScreen() {
    setRemaining(config.exerciseSeconds);
    setStatus("running");
    setPending(null);
+   resetTickClock();
    return;
   }
 
@@ -242,6 +471,7 @@ export default function TimerScreen() {
     setRemaining(config.restSeconds);
     setStatus("running");
     setPending(null);
+    resetTickClock();
     return;
    }
 
@@ -258,6 +488,7 @@ export default function TimerScreen() {
    setRemaining(config.exerciseSeconds);
    setStatus("running");
    setPending(null);
+   resetTickClock();
    return;
   }
 
@@ -274,6 +505,7 @@ export default function TimerScreen() {
   setRemaining(config.exerciseSeconds);
   setStatus("running");
   setPending(null);
+  resetTickClock();
  }
 
  function pauseTimer() {
@@ -281,7 +513,9 @@ export default function TimerScreen() {
  }
 
  function resumeTimer() {
-  if (status === "paused") setStatus("running");
+  if (status !== "paused") return;
+  setStatus("running");
+  resetTickClock();
  }
 
  function continueTimer() {
@@ -291,7 +525,28 @@ export default function TimerScreen() {
   setRemaining(pending.remaining);
   setPending(null);
   setStatus("running");
+  resetTickClock();
  }
+
+ useEffect(() => {
+  pauseTimerRef.current = pauseTimer;
+  skipSetRef.current = skipSet;
+ }, [pauseTimer, skipSet]);
+
+ useEffect(() => {
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+   if (!isTimerNotificationResponse(response)) return;
+   if (response.actionIdentifier === TIMER_NOTIFICATION_ACTIONS.PAUSE) {
+    pauseTimerRef.current();
+    void cancelBackgroundNotifications();
+    return;
+   }
+   if (response.actionIdentifier === TIMER_NOTIFICATION_ACTIONS.SKIP) {
+    skipSetRef.current();
+   }
+  });
+  return () => subscription.remove();
+ }, [cancelBackgroundNotifications]);
 
  const timerTextColor = phase === "prep" ? mutedTextColor : textColor;
  const phaseLabel =
