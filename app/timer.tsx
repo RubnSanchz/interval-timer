@@ -1,9 +1,10 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
+import { useFeedback } from "@/hooks/use-feedback";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { formatTime } from "@/utils/formatTime";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 const PREP_SECONDS = 5;
@@ -24,6 +25,7 @@ export default function TimerScreen() {
  const ghostBorder = useThemeColor({ light: "#bbb", dark: "#333" }, "text");
  const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
  const ghostBackground = useThemeColor({ light: "#F3F4F6", dark: "#1E2023" }, "background");
+ const { triggerFeedback } = useFeedback();
  const params = useLocalSearchParams<{
   sets?: string | string[];
   exerciseSeconds?: string | string[];
@@ -79,6 +81,8 @@ export default function TimerScreen() {
  const [remaining, setRemaining] = useState(PREP_SECONDS > 0 ? PREP_SECONDS : config.exerciseSeconds);
  const [status, setStatus] = useState<Status>("running");
  const [pending, setPending] = useState<PendingTransition | null>(null);
+ const previousPhase = useRef<Phase>(phase);
+ const previousStatus = useRef<Status>(status);
 
  useEffect(() => {
   setPhase(PREP_SECONDS > 0 ? "prep" : "exercise");
@@ -95,6 +99,21 @@ export default function TimerScreen() {
   }, 1000);
   return () => clearInterval(interval);
  }, [status]);
+
+ useEffect(() => {
+  if (phase !== previousPhase.current) {
+   if (phase === "exercise" || phase === "rest") triggerFeedback("phase");
+   if (phase === "done") triggerFeedback("complete");
+   previousPhase.current = phase;
+  }
+ }, [phase, triggerFeedback]);
+
+ useEffect(() => {
+  if (status !== previousStatus.current) {
+   if (status === "holding") triggerFeedback("hold");
+   previousStatus.current = status;
+  }
+ }, [status, triggerFeedback]);
 
  useEffect(() => {
   if (status !== "running") return;

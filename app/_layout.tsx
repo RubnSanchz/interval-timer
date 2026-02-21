@@ -3,8 +3,9 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { PresetsProvider } from '@/hooks/use-presets';
+import { AppSettingsProvider } from '@/hooks/use-app-settings';
 import { AppThemeProvider, useAppTheme } from '@/hooks/use-app-theme';
+import { PresetsProvider } from '@/hooks/use-presets';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -13,7 +14,9 @@ export const unstable_settings = {
 export default function RootLayout() {
   return (
     <AppThemeProvider>
-      <RootLayoutContent />
+      <AppSettingsProvider>
+        <RootLayoutContent />
+      </AppSettingsProvider>
     </AppThemeProvider>
   );
 }
