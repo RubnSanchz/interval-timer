@@ -18,6 +18,8 @@ Atajos útiles:
 - `npm run ios`
 - `npm run web`
 
+Guia para generar e instalar APK: `docs/GUIA_APK.md`
+
 ---
 
 ## Estado actual

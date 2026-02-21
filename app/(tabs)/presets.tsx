@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet, FlatList } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { usePresets } from "@/hooks/use-presets";
 import type { WorkoutPreset } from "@/domain/models/WorkoutPreset";
@@ -33,61 +34,66 @@ export default function PresetsScreen() {
 
   if (presets.length === 0) {
     return (
-      <View style={StyleSheet.flatten([styles.emptyContainer, { backgroundColor }])}>
-        <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Presets</Text>
-        <Text style={StyleSheet.flatten([styles.emptyText, { color: mutedTextColor }])}>
-          Aun no hay presets guardados.
-        </Text>
-        <Link href="/create-preset" asChild>
-          <Pressable style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}>
-            <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Crear preset</Text>
-          </Pressable>
-        </Link>
-      </View>
+      <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top"]}>
+        <View style={styles.emptyContainer}>
+          <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Presets</Text>
+          <Text style={StyleSheet.flatten([styles.emptyText, { color: mutedTextColor }])}>
+            Aun no hay presets guardados.
+          </Text>
+          <Link href="/create-preset" asChild>
+            <Pressable style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}>
+              <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Crear preset</Text>
+            </Pressable>
+          </Link>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={StyleSheet.flatten([styles.container, { backgroundColor }])}>
-      <View style={styles.header}>
-        <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Presets</Text>
-        <Link href="/create-preset" asChild>
-          <Pressable style={StyleSheet.flatten([styles.secondaryButton, { borderColor: secondaryBorder }])}>
-            <Text style={StyleSheet.flatten([styles.secondaryButtonText, { color: secondaryText }])}>Nuevo</Text>
-          </Pressable>
-        </Link>
-      </View>
+    <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top"]}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Presets</Text>
+          <Link href="/create-preset" asChild>
+            <Pressable style={StyleSheet.flatten([styles.secondaryButton, { borderColor: secondaryBorder }])}>
+              <Text style={StyleSheet.flatten([styles.secondaryButtonText, { color: secondaryText }])}>Nuevo</Text>
+            </Pressable>
+          </Link>
+        </View>
 
-      <FlatList
-        data={presets}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <View style={StyleSheet.flatten([styles.card, { borderColor, backgroundColor: cardBackground }])}>
-            <Text style={StyleSheet.flatten([styles.cardTitle, { color: textColor }])}>{item.name}</Text>
-            <Text style={StyleSheet.flatten([styles.cardMeta, { color: mutedTextColor }])}>
-              {item.exerciseSeconds}s ejercicio - {item.restSeconds}s descanso - {item.sets} sets
-            </Text>
-            <View style={styles.cardActions}>
-              <Pressable
-                style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
-                onPress={() => startPreset(item)}>
-                <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Iniciar</Text>
-              </Pressable>
-              <Pressable
-                style={StyleSheet.flatten([styles.dangerButton, { borderColor: dangerColor }])}
-                onPress={() => removePreset(item.id)}>
-                <Text style={StyleSheet.flatten([styles.dangerButtonText, { color: dangerColor }])}>Eliminar</Text>
-              </Pressable>
+        <FlatList
+          data={presets}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <View style={StyleSheet.flatten([styles.card, { borderColor, backgroundColor: cardBackground }])}>
+              <Text style={StyleSheet.flatten([styles.cardTitle, { color: textColor }])}>{item.name}</Text>
+              <Text style={StyleSheet.flatten([styles.cardMeta, { color: mutedTextColor }])}>
+                {item.exerciseSeconds}s ejercicio - {item.restSeconds}s descanso - {item.sets} sets
+              </Text>
+              <View style={styles.cardActions}>
+                <Pressable
+                  style={StyleSheet.flatten([styles.primaryButton, { backgroundColor: primaryBackground }])}
+                  onPress={() => startPreset(item)}>
+                  <Text style={StyleSheet.flatten([styles.primaryButtonText, { color: primaryText }])}>Iniciar</Text>
+                </Pressable>
+                <Pressable
+                  style={StyleSheet.flatten([styles.dangerButton, { borderColor: dangerColor }])}
+                  onPress={() => removePreset(item.id)}>
+                  <Text style={StyleSheet.flatten([styles.dangerButtonText, { color: dangerColor }])}>Eliminar</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        )}
-      />
-    </View>
+          )}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   container: { flex: 1 },
   header: {
     padding: 16,

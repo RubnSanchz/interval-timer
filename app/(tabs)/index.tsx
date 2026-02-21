@@ -1,4 +1,5 @@
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
@@ -45,7 +46,7 @@ export default function ConfigScreen() {
   }
 
   return (
-    <View style={StyleSheet.flatten([styles.screen, { backgroundColor }])}>
+    <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top"]}>
       <View style={styles.container}>
         <Text style={StyleSheet.flatten([styles.title, { color: textColor }])}>Configurar intervalo</Text>
 
@@ -96,7 +97,7 @@ export default function ConfigScreen() {
           </Pressable>
         </Link>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
