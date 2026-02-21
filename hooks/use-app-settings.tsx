@@ -3,16 +3,18 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 type AppSettings = {
   hapticsEnabled: boolean;
+  keepAwakeEnabled: boolean;
   soundVolume: number;
 };
 
 type AppSettingsContextValue = AppSettings & {
   setHapticsEnabled: (enabled: boolean) => void;
+  setKeepAwakeEnabled: (enabled: boolean) => void;
   setSoundVolume: (volume: number) => void;
 };
 
 const STORAGE_KEY = "intervalTimer.settings.v1";
-const DEFAULT_SETTINGS: AppSettings = { hapticsEnabled: true, soundVolume: 0.6 };
+const DEFAULT_SETTINGS: AppSettings = { hapticsEnabled: true, keepAwakeEnabled: true, soundVolume: 0.6 };
 
 const AppSettingsContext = createContext<AppSettingsContextValue | undefined>(undefined);
 
@@ -26,9 +28,11 @@ function parseSettings(raw: unknown): AppSettings | null {
   const candidate = raw as Partial<AppSettings>;
   const hapticsEnabled =
     typeof candidate.hapticsEnabled === "boolean" ? candidate.hapticsEnabled : DEFAULT_SETTINGS.hapticsEnabled;
+  const keepAwakeEnabled =
+    typeof candidate.keepAwakeEnabled === "boolean" ? candidate.keepAwakeEnabled : DEFAULT_SETTINGS.keepAwakeEnabled;
   const soundVolume =
     typeof candidate.soundVolume === "number" ? clampSoundVolume(candidate.soundVolume) : DEFAULT_SETTINGS.soundVolume;
-  return { hapticsEnabled, soundVolume };
+  return { hapticsEnabled, keepAwakeEnabled, soundVolume };
 }
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
@@ -62,9 +66,12 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       hapticsEnabled: settings.hapticsEnabled,
+      keepAwakeEnabled: settings.keepAwakeEnabled,
       soundVolume: settings.soundVolume,
       setHapticsEnabled: (enabled: boolean) =>
         setSettings((current) => ({ ...current, hapticsEnabled: enabled })),
+      setKeepAwakeEnabled: (enabled: boolean) =>
+        setSettings((current) => ({ ...current, keepAwakeEnabled: enabled })),
       setSoundVolume: (volume: number) =>
         setSettings((current) => ({ ...current, soundVolume: clampSoundVolume(volume) })),
     }),

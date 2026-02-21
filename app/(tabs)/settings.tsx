@@ -19,7 +19,8 @@ const SOUND_LEVELS: { value: number; title: string }[] = [
 
 export default function SettingsScreen() {
  const { preference, setPreference } = useAppTheme();
- const { hapticsEnabled, setHapticsEnabled, soundVolume, setSoundVolume } = useAppSettings();
+ const { hapticsEnabled, setHapticsEnabled, keepAwakeEnabled, setKeepAwakeEnabled, soundVolume, setSoundVolume } =
+  useAppSettings();
  const backgroundColor = useThemeColor({}, "background");
  const textColor = useThemeColor({}, "text");
  const mutedTextColor = useThemeColor({ light: "#555", dark: "#9ba1a6" }, "text");
@@ -91,7 +92,7 @@ export default function SettingsScreen() {
       <View style={styles.optionText}>
        <Text style={StyleSheet.flatten([styles.optionTitle, { color: textColor }])}>Activar vibracion</Text>
        <Text style={StyleSheet.flatten([styles.optionDescription, { color: mutedTextColor }])}>
-        Vibra al finalizar un set
+        Vibra con los avisos
        </Text>
       </View>
       <Switch
@@ -128,6 +129,33 @@ export default function SettingsScreen() {
         {level.title}
        </Text>
       ))}
+     </View>
+    </View>
+
+    <Text style={StyleSheet.flatten([styles.sectionTitle, { color: textColor }])}>Pantalla</Text>
+    <Text style={StyleSheet.flatten([styles.subTitle, { color: mutedTextColor }])}>Bloqueo</Text>
+    <View style={styles.options}>
+     <View
+      style={StyleSheet.flatten([
+       styles.option,
+       {
+        borderColor,
+        backgroundColor: keepAwakeEnabled ? selectedBackground : cardBackground,
+       },
+      ])}
+     >
+      <View style={styles.optionText}>
+       <Text style={StyleSheet.flatten([styles.optionTitle, { color: textColor }])}>Evitar bloqueo</Text>
+       <Text style={StyleSheet.flatten([styles.optionDescription, { color: mutedTextColor }])}>
+        Mantiene la pantalla activa mientras el temporizador está activo
+       </Text>
+      </View>
+      <Switch
+       value={keepAwakeEnabled}
+       onValueChange={setKeepAwakeEnabled}
+       trackColor={{ false: switchTrackOff, true: tintColor }}
+       thumbColor={switchThumb}
+      />
      </View>
     </View>
    </View>
