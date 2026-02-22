@@ -5,7 +5,6 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import {
  clearStoredTimerState,
- ensureTimerNotificationsReady,
  getCurrentTimerSnapshot,
  readStoredTimerState,
  startTimerForegroundService,
@@ -98,24 +97,23 @@ export default function TimerScreen() {
  const timerStateRef = useRef<TimerSnapshot>({ phase, setIndex, remaining, status, pending });
  const lastTickAtRef = useRef<number | null>(null);
  const configRef = useRef(config);
- const notificationsEnabledRef = useRef(false);
  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
  const pauseTimerRef = useRef<() => void>(() => {});
  const skipSetRef = useRef<() => void>(() => {});
 
  const resetTickClock = useCallback(() => {
   lastTickAtRef.current = Date.now();
- }, [ensureTimerNotificationsReady]);
+ }, []);
 
  const hydrateTimerFromStorage = useCallback(async () => {
- const stored = await readStoredTimerState();
- if (!stored) return;
- const currentConfig = configRef.current;
- if (!currentConfig || !isSameConfig(stored.config, currentConfig)) {
-  await clearStoredTimerState();
-  return;
- }
- const snapshot = getCurrentTimerSnapshot(stored, Date.now());
+  const stored = await readStoredTimerState();
+  if (!stored) return;
+  const currentConfig = configRef.current;
+  if (!currentConfig || !isSameConfig(stored.config, currentConfig)) {
+   await clearStoredTimerState();
+   return;
+  }
+  const snapshot = getCurrentTimerSnapshot(stored, Date.now());
   setPhase(snapshot.phase);
   setSetIndex(snapshot.setIndex);
   setRemaining(snapshot.remaining);
@@ -134,20 +132,6 @@ export default function TimerScreen() {
  }, [config]);
 
  useEffect(() => {
-  let isActive = true;
-  ensureTimerNotificationsReady()
-   .then((enabled) => {
-    if (isActive) notificationsEnabledRef.current = enabled;
-   })
-   .catch(() => {
-    if (isActive) notificationsEnabledRef.current = false;
-   });
-  return () => {
-   isActive = false;
-  };
- }, [ensureTimerNotificationsReady]);
-
- useEffect(() => {
   const subscription = AppState.addEventListener("change", (nextState) => {
    const previousState = appStateRef.current;
    appStateRef.current = nextState;
@@ -155,10 +139,7 @@ export default function TimerScreen() {
     const snapshot = timerStateRef.current;
     const configValue = configRef.current;
     if (!configValue) return;
-    if (
-     notificationsEnabledRef.current &&
-     (snapshot.status === "running" || snapshot.status === "holding")
-    ) {
+    if (snapshot.status === "running" || snapshot.status === "holding") {
      void startTimerForegroundService({
       config: configValue,
       snapshot,
@@ -205,10 +186,10 @@ export default function TimerScreen() {
   config.exerciseSeconds,
   config.restSeconds,
   config.sets,
- config.exerciseAutoAdvance,
- config.restAutoAdvance,
- resetTickClock,
-]);
+  config.exerciseAutoAdvance,
+  config.restAutoAdvance,
+  resetTickClock,
+ ]);
 
  useEffect(() => {
   void hydrateTimerFromStorage();

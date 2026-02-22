@@ -195,10 +195,15 @@ export function getCurrentTimerSnapshot(stored: StoredTimerState, now = Date.now
 
 export async function startTimerForegroundService(state: StoredTimerState) {
  if (Platform.OS !== "android") return;
- await ensureChannelsConfigured();
- await persistTimerState(state);
- const snapshot = getCurrentTimerSnapshot(state, Date.now());
- await updateForegroundNotification(snapshot, state.config);
+ try {
+  await persistTimerState(state);
+  const settings = await notifee.getNotificationSettings();
+  if (settings.authorizationStatus !== AuthorizationStatus.AUTHORIZED) return;
+  await ensureChannelsConfigured();
+  const snapshot = getCurrentTimerSnapshot(state, Date.now());
+  await updateForegroundNotification(snapshot, state.config);
+ } catch {
+ }
 }
 
 export async function stopTimerForegroundService() {
@@ -254,7 +259,7 @@ export function registerTimerForegroundService() {
    let stopped = false;
    let inFlight = false;
 
-  const interval = setInterval(async () => {
+   const interval = setInterval(async () => {
     if (stopped || inFlight) return;
     inFlight = true;
     try {
@@ -283,14 +288,13 @@ export function registerTimerForegroundService() {
       const key = `${snapshot.phase}:${snapshot.remaining}:${beepKind}`;
       if (lastBeepKey !== key) {
        lastBeepKey = key;
-      await showBeepNotification(snapshot, beepKind);
+       await showBeepNotification(snapshot, beepKind);
       }
      }
     } finally {
      inFlight = false;
     }
    }, 1000);
-
   });
  });
 }
