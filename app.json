@@ -29,7 +29,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
+      "@notifee/react-native",
       [
         "expo-splash-screen",
         {

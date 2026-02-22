@@ -1,19 +1,20 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import type { TimerConfig } from "@/domain/models/TimerConfig";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import {
- clearTimerNotifications,
- isTimerNotificationResponse,
- prepareTimerNotifications,
- scheduleTimerNotifications as scheduleBackgroundTimerNotifications,
+ clearStoredTimerState,
+ ensureTimerNotificationsReady,
+ getCurrentTimerSnapshot,
+ readStoredTimerState,
+ startTimerForegroundService,
+ stopTimerForegroundService,
  TIMER_NOTIFICATION_ACTIONS,
- type TimerNotificationState,
 } from "@/services/timer-notifications";
+import { advanceTimerBySeconds, isSameConfig, type PendingTransition, type Phase, type Status, type TimerSnapshot } from "@/services/timer-state";
 import { formatTime } from "@/utils/formatTime";
-import * as Notifications from "expo-notifications";
+import notifee, { EventType } from "@notifee/react-native";
 import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,100 +23,6 @@ import type { AppStateStatus } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PREP_SECONDS = 5;
-
-type Phase = "prep" | "exercise" | "rest" | "done";
-type Status = "running" | "paused" | "holding" | "done";
-type PendingTransition = { phase: "exercise" | "rest"; setIndex: number; remaining: number };
-type TimerSnapshot = TimerNotificationState;
-
-function advanceTimerBySeconds(snapshot: TimerSnapshot, config: TimerConfig, elapsedSeconds: number): TimerSnapshot {
- if (elapsedSeconds <= 0) return snapshot;
- if (snapshot.status !== "running") return snapshot;
-
- let { phase, setIndex, remaining } = snapshot;
- let status: Status = snapshot.status;
- let pending: PendingTransition | null = snapshot.pending;
- let secondsLeft = elapsedSeconds;
-
- if (pending) pending = null;
- if (remaining < 0) remaining = 0;
-
- while (secondsLeft > 0 && status === "running") {
-  if (remaining > 0) {
-   if (secondsLeft < remaining) {
-    remaining -= secondsLeft;
-    secondsLeft = 0;
-    break;
-   }
-   secondsLeft -= remaining;
-   remaining = 0;
-   if (secondsLeft === 0) break;
-  }
-
-  if (phase === "prep") {
-   phase = "exercise";
-   remaining = config.exerciseSeconds;
-   continue;
-  }
-
-  if (phase === "exercise") {
-   if (setIndex >= config.sets) {
-    phase = "done";
-    status = "done";
-    pending = null;
-    remaining = 0;
-    break;
-   }
-
-   const nextPhase =
-    config.restSeconds > 0
-     ? { phase: "rest" as const, setIndex, remaining: config.restSeconds }
-     : { phase: "exercise" as const, setIndex: setIndex + 1, remaining: config.exerciseSeconds };
-
-   if (config.exerciseAutoAdvance) {
-    phase = nextPhase.phase;
-    setIndex = nextPhase.setIndex;
-    remaining = nextPhase.remaining;
-    continue;
-   }
-
-   pending = nextPhase;
-   status = "holding";
-   break;
-  }
-
-  if (phase === "rest") {
-   const nextSet = setIndex + 1;
-   if (nextSet > config.sets) {
-    phase = "done";
-    status = "done";
-    pending = null;
-    remaining = 0;
-    break;
-   }
-
-   const nextPhase = { phase: "exercise" as const, setIndex: nextSet, remaining: config.exerciseSeconds };
-   if (config.restAutoAdvance) {
-    phase = nextPhase.phase;
-    setIndex = nextPhase.setIndex;
-    remaining = nextPhase.remaining;
-    continue;
-   }
-
-   pending = nextPhase;
-   status = "holding";
-   break;
-  }
-
-  phase = "done";
-  status = "done";
-  pending = null;
-  remaining = 0;
-  break;
- }
-
- return { phase, setIndex, remaining, status, pending };
-}
 
 export default function TimerScreen() {
  const router = useRouter();
@@ -193,36 +100,30 @@ export default function TimerScreen() {
  const configRef = useRef(config);
  const notificationsEnabledRef = useRef(false);
  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
- const scheduledNotificationIdsRef = useRef<string[]>([]);
- const statusNotificationIdRef = useRef<string | null>(null);
  const pauseTimerRef = useRef<() => void>(() => {});
  const skipSetRef = useRef<() => void>(() => {});
 
  const resetTickClock = useCallback(() => {
   lastTickAtRef.current = Date.now();
- }, []);
+ }, [ensureTimerNotificationsReady]);
 
- const cancelBackgroundNotifications = useCallback(async () => {
-  const scheduledIds = scheduledNotificationIdsRef.current;
-  const statusId = statusNotificationIdRef.current;
-  if (scheduledIds.length === 0 && !statusId) return;
-  await clearTimerNotifications(scheduledIds, statusId);
-  scheduledNotificationIdsRef.current = [];
-  statusNotificationIdRef.current = null;
- }, []);
-
- const scheduleBackgroundNotifications = useCallback(async () => {
-  if (!notificationsEnabledRef.current) return;
-  if (appStateRef.current === "active") return;
-  const snapshot = timerStateRef.current;
-  if (snapshot.status !== "running") return;
-  await cancelBackgroundNotifications();
-  const configValue = configRef.current;
-  if (!configValue) return;
-  const result = await scheduleBackgroundTimerNotifications({ config: configValue, snapshot });
-  scheduledNotificationIdsRef.current = result.scheduledIds;
-  statusNotificationIdRef.current = result.statusNotificationId;
- }, [cancelBackgroundNotifications]);
+ const hydrateTimerFromStorage = useCallback(async () => {
+ const stored = await readStoredTimerState();
+ if (!stored) return;
+ const currentConfig = configRef.current;
+ if (!currentConfig || !isSameConfig(stored.config, currentConfig)) {
+  await clearStoredTimerState();
+  return;
+ }
+ const snapshot = getCurrentTimerSnapshot(stored, Date.now());
+  setPhase(snapshot.phase);
+  setSetIndex(snapshot.setIndex);
+  setRemaining(snapshot.remaining);
+  setStatus(snapshot.status);
+  setPending(snapshot.pending);
+  resetTickClock();
+  await clearStoredTimerState();
+ }, [clearStoredTimerState, getCurrentTimerSnapshot, isSameConfig, readStoredTimerState, resetTickClock]);
 
  useEffect(() => {
   timerStateRef.current = { phase, setIndex, remaining, status, pending };
@@ -234,7 +135,7 @@ export default function TimerScreen() {
 
  useEffect(() => {
   let isActive = true;
-  prepareTimerNotifications()
+  ensureTimerNotificationsReady()
    .then((enabled) => {
     if (isActive) notificationsEnabledRef.current = enabled;
    })
@@ -244,33 +145,46 @@ export default function TimerScreen() {
   return () => {
    isActive = false;
   };
- }, []);
+ }, [ensureTimerNotificationsReady]);
 
  useEffect(() => {
   const subscription = AppState.addEventListener("change", (nextState) => {
    const previousState = appStateRef.current;
    appStateRef.current = nextState;
-   if (nextState === "active") {
-    void cancelBackgroundNotifications();
+   if (previousState === "active" && nextState !== "active") {
+    const snapshot = timerStateRef.current;
+    const configValue = configRef.current;
+    if (!configValue) return;
+    if (
+     notificationsEnabledRef.current &&
+     (snapshot.status === "running" || snapshot.status === "holding")
+    ) {
+     void startTimerForegroundService({
+      config: configValue,
+      snapshot,
+      updatedAt: Date.now(),
+     });
+    }
     return;
    }
-   if (previousState === "active") {
-    void scheduleBackgroundNotifications();
+   if (nextState === "active") {
+    void stopTimerForegroundService();
+    void hydrateTimerFromStorage();
    }
   });
   return () => subscription.remove();
- }, [cancelBackgroundNotifications, scheduleBackgroundNotifications]);
+ }, [hydrateTimerFromStorage, startTimerForegroundService, stopTimerForegroundService]);
 
  useEffect(() => {
-  if (status === "running") return;
-  void cancelBackgroundNotifications();
- }, [status, cancelBackgroundNotifications]);
+  if (status === "running" || status === "holding") return;
+  void stopTimerForegroundService();
+ }, [status, stopTimerForegroundService]);
 
  useEffect(() => {
   return () => {
-   void cancelBackgroundNotifications();
+   void stopTimerForegroundService();
   };
- }, [cancelBackgroundNotifications]);
+ }, [stopTimerForegroundService]);
 
  useEffect(() => {
   if (status === "running") {
@@ -291,10 +205,14 @@ export default function TimerScreen() {
   config.exerciseSeconds,
   config.restSeconds,
   config.sets,
-  config.exerciseAutoAdvance,
-  config.restAutoAdvance,
-  resetTickClock,
- ]);
+ config.exerciseAutoAdvance,
+ config.restAutoAdvance,
+ resetTickClock,
+]);
+
+ useEffect(() => {
+  void hydrateTimerFromStorage();
+ }, [hydrateTimerFromStorage]);
 
  useEffect(() => {
   if (status !== "running") return;
@@ -534,19 +452,19 @@ export default function TimerScreen() {
  }, [pauseTimer, skipSet]);
 
  useEffect(() => {
-  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-   if (!isTimerNotificationResponse(response)) return;
-   if (response.actionIdentifier === TIMER_NOTIFICATION_ACTIONS.PAUSE) {
+  const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+   if (type !== EventType.ACTION_PRESS) return;
+   const actionId = detail.pressAction?.id;
+   if (actionId === TIMER_NOTIFICATION_ACTIONS.PAUSE) {
     pauseTimerRef.current();
-    void cancelBackgroundNotifications();
     return;
    }
-   if (response.actionIdentifier === TIMER_NOTIFICATION_ACTIONS.SKIP) {
+   if (actionId === TIMER_NOTIFICATION_ACTIONS.SKIP) {
     skipSetRef.current();
    }
   });
-  return () => subscription.remove();
- }, [cancelBackgroundNotifications]);
+  return unsubscribe;
+ }, []);
 
  const timerTextColor = phase === "prep" ? mutedTextColor : textColor;
  const phaseLabel =

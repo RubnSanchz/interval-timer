@@ -1,43 +1,70 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import notifee, { AndroidImportance, AuthorizationStatus } from "@notifee/react-native";
 import type { TimerConfig } from "@/domain/models/TimerConfig";
 import { formatTime } from "@/utils/formatTime";
-import * as Notifications from "expo-notifications";
+import { advanceTimerBySeconds, applySkipTransition, type TimerSnapshot } from "@/services/timer-state";
 import { Platform } from "react-native";
-
-type Phase = "prep" | "exercise" | "rest" | "done";
-type Status = "running" | "paused" | "holding" | "done";
-
-export type TimerNotificationState = {
- phase: Phase;
- setIndex: number;
- remaining: number;
- status: Status;
- pending: { phase: "exercise" | "rest"; setIndex: number; remaining: number } | null;
-};
 
 export const TIMER_NOTIFICATION_ACTIONS = {
  PAUSE: "timer.pause",
  SKIP: "timer.skip",
 };
 
-const TIMER_NOTIFICATION_SOURCE = "interval-timer";
-const TIMER_CATEGORY_ID = "timer-actions";
-const TIMER_STATUS_CHANNEL_ID = "timer-status";
-const TIMER_ALERT_CHANNEL_ID = "timer-alerts";
-
-type ScheduleResult = {
- scheduledIds: string[];
- statusNotificationId: string | null;
+export type StoredTimerState = {
+ config: TimerConfig;
+ snapshot: TimerSnapshot;
+ updatedAt: number;
 };
 
-type ScheduleEvent = {
- offsetSeconds: number;
- phase: Phase;
- remaining: number;
- setIndex: number;
- kind: "phase" | "hold" | "done";
-};
+const STORAGE_KEY = "intervalTimer.timerState.v2";
+const FOREGROUND_CHANNEL_ID = "timer-foreground";
+const ALERT_CHANNEL_ID = "timer-alerts";
+const FOREGROUND_NOTIFICATION_ID = "timer-foreground";
+const ALERT_NOTIFICATION_ID = "timer-alert";
 
-function getPhaseLabel(phase: Phase) {
+function isValidSnapshot(snapshot: unknown): snapshot is TimerSnapshot {
+ if (!snapshot || typeof snapshot !== "object") return false;
+ const candidate = snapshot as TimerSnapshot;
+ return (
+  typeof candidate.phase === "string" &&
+  typeof candidate.setIndex === "number" &&
+  typeof candidate.remaining === "number" &&
+  typeof candidate.status === "string" &&
+  (candidate.pending === null ||
+   (typeof candidate.pending === "object" &&
+    typeof candidate.pending.phase === "string" &&
+    typeof candidate.pending.setIndex === "number" &&
+    typeof candidate.pending.remaining === "number"))
+ );
+}
+
+function isValidConfig(config: unknown): config is TimerConfig {
+ if (!config || typeof config !== "object") return false;
+ const candidate = config as TimerConfig;
+ return (
+  typeof candidate.sets === "number" &&
+  typeof candidate.exerciseSeconds === "number" &&
+  typeof candidate.restSeconds === "number" &&
+  typeof candidate.exerciseAutoAdvance === "boolean" &&
+  typeof candidate.restAutoAdvance === "boolean"
+ );
+}
+
+function parseStoredState(raw: string | null): StoredTimerState | null {
+ if (!raw) return null;
+ try {
+  const parsed = JSON.parse(raw) as StoredTimerState;
+  if (!parsed || typeof parsed !== "object") return null;
+  if (!isValidConfig(parsed.config)) return null;
+  if (!isValidSnapshot(parsed.snapshot)) return null;
+  if (typeof parsed.updatedAt !== "number") return null;
+  return parsed;
+ } catch {
+  return null;
+ }
+}
+
+function getPhaseLabel(phase: TimerSnapshot["phase"]) {
  switch (phase) {
   case "prep":
    return "Preparacion";
@@ -52,249 +79,218 @@ function getPhaseLabel(phase: Phase) {
  }
 }
 
-function buildStatusBody(state: TimerNotificationState, config: TimerConfig) {
- const phaseLabel = getPhaseLabel(state.phase);
- const setLabel = `Set ${Math.min(state.setIndex, config.sets)} / ${config.sets}`;
- const timeLabel = `Tiempo restante: ${formatTime(state.remaining)}`;
+function getStatusTitle(snapshot: TimerSnapshot) {
+ if (snapshot.status === "holding") return "Listo para continuar";
+ if (snapshot.status === "paused") return "Temporizador pausado";
+ if (snapshot.status === "done") return "Entreno completado";
+ return "Intervalo en curso";
+}
+
+function buildStatusBody(snapshot: TimerSnapshot, config: TimerConfig) {
+ if (snapshot.status === "holding" && snapshot.pending) {
+  const phaseLabel = getPhaseLabel(snapshot.pending.phase);
+  const setLabel = `Set ${Math.min(snapshot.pending.setIndex, config.sets)} / ${config.sets}`;
+  const timeLabel = `Tiempo restante: ${formatTime(snapshot.pending.remaining)}`;
+  return `Siguiente: ${phaseLabel} - ${timeLabel} - ${setLabel}`;
+ }
+ const phaseLabel = getPhaseLabel(snapshot.phase);
+ const setLabel = `Set ${Math.min(snapshot.setIndex, config.sets)} / ${config.sets}`;
+ const timeLabel = `Tiempo restante: ${formatTime(snapshot.remaining)}`;
  return `Fase: ${phaseLabel} - ${timeLabel} - ${setLabel}`;
 }
 
-function buildPhaseEvents(state: TimerNotificationState, config: TimerConfig) {
- if (state.status !== "running") return [] as ScheduleEvent[];
-
- const events: ScheduleEvent[] = [];
- let offsetSeconds = 0;
- let phase: Phase = state.phase;
- let setIndex = state.setIndex;
- let remaining = Math.max(0, state.remaining);
-
- while (true) {
-  if (remaining <= 0 && phase === "done") break;
-  const phaseEndOffset = offsetSeconds + remaining;
-
-  if (phase === "prep") {
-   offsetSeconds = phaseEndOffset;
-   phase = "exercise";
-   remaining = config.exerciseSeconds;
-   events.push({ offsetSeconds, phase, remaining, setIndex, kind: "phase" });
-   continue;
-  }
-
-  if (phase === "exercise") {
-   if (setIndex >= config.sets) {
-    offsetSeconds = phaseEndOffset;
-    events.push({ offsetSeconds, phase: "done", remaining: 0, setIndex, kind: "done" });
-    break;
-   }
-
-   if (config.restSeconds > 0) {
-    offsetSeconds = phaseEndOffset;
-    if (config.exerciseAutoAdvance) {
-     phase = "rest";
-     remaining = config.restSeconds;
-     events.push({ offsetSeconds, phase, remaining, setIndex, kind: "phase" });
-     continue;
-    }
-
-    events.push({
-     offsetSeconds,
-     phase: "rest",
-     remaining: config.restSeconds,
-     setIndex,
-     kind: "hold",
-    });
-    break;
-   }
-
-   offsetSeconds = phaseEndOffset;
-   if (config.exerciseAutoAdvance) {
-    const nextSet = setIndex + 1;
-    if (nextSet > config.sets) {
-     events.push({ offsetSeconds, phase: "done", remaining: 0, setIndex, kind: "done" });
-     break;
-    }
-    setIndex = nextSet;
-    phase = "exercise";
-    remaining = config.exerciseSeconds;
-    events.push({ offsetSeconds, phase, remaining, setIndex, kind: "phase" });
-    continue;
-   }
-
-   events.push({
-    offsetSeconds,
-    phase: "exercise",
-    remaining: config.exerciseSeconds,
-    setIndex: setIndex + 1,
-    kind: "hold",
-   });
-   break;
-  }
-
-  if (phase === "rest") {
-   const nextSet = setIndex + 1;
-   offsetSeconds = phaseEndOffset;
-   if (nextSet > config.sets) {
-    events.push({ offsetSeconds, phase: "done", remaining: 0, setIndex, kind: "done" });
-    break;
-   }
-
-   if (config.restAutoAdvance) {
-    setIndex = nextSet;
-    phase = "exercise";
-    remaining = config.exerciseSeconds;
-    events.push({ offsetSeconds, phase, remaining, setIndex, kind: "phase" });
-    continue;
-   }
-
-   events.push({
-    offsetSeconds,
-    phase: "exercise",
-    remaining: config.exerciseSeconds,
-    setIndex: nextSet,
-    kind: "hold",
-   });
-   break;
-  }
-
-  events.push({ offsetSeconds: phaseEndOffset, phase: "done", remaining: 0, setIndex, kind: "done" });
-  break;
+function getBeepKind(snapshot: TimerSnapshot): "short" | "long" | null {
+ if (snapshot.status !== "running") return null;
+ if (snapshot.phase === "rest" && (snapshot.remaining === 2 || snapshot.remaining === 1 || snapshot.remaining === 0)) {
+  return "short";
  }
-
- return events.filter((event) => event.offsetSeconds > 0);
-}
-
-function buildAlertContent(event: ScheduleEvent, config: TimerConfig): Notifications.NotificationContentInput {
- const phaseLabel = getPhaseLabel(event.phase);
- const setLabel = `Set ${Math.min(event.setIndex, config.sets)} / ${config.sets}`;
- const timeLabel = event.kind === "done" ? "Tiempo restante: 00:00" : `Tiempo restante: ${formatTime(event.remaining)}`;
-
- let title = "Intervalo en curso";
- if (event.kind === "done") title = "Entreno completado";
- if (event.kind === "hold") title = "Listo para continuar";
-
- const body =
-  event.kind === "hold"
-   ? `Siguiente: ${phaseLabel} - ${timeLabel} - ${setLabel}`
-   : `Fase: ${phaseLabel} - ${timeLabel} - ${setLabel}`;
-
- return {
-  title,
-  body,
-  sound: "default",
-  categoryIdentifier: TIMER_CATEGORY_ID,
-  channelId: TIMER_ALERT_CHANNEL_ID,
-  data: { source: TIMER_NOTIFICATION_SOURCE },
- };
-}
-
-function buildStatusContent(
- state: TimerNotificationState,
- config: TimerConfig
-): Notifications.NotificationContentInput {
- return {
-  title: "Intervalo en curso",
-  body: buildStatusBody(state, config),
-  categoryIdentifier: TIMER_CATEGORY_ID,
-  channelId: TIMER_STATUS_CHANNEL_ID,
-  data: { source: TIMER_NOTIFICATION_SOURCE },
- };
+ if (snapshot.phase === "exercise") {
+  if (snapshot.remaining === 2 || snapshot.remaining === 1) return "short";
+  if (snapshot.remaining === 0) return "long";
+ }
+ return null;
 }
 
 async function ensureChannelsConfigured() {
  if (Platform.OS !== "android") return;
 
- await Notifications.setNotificationChannelAsync(TIMER_STATUS_CHANNEL_ID, {
+ await notifee.createChannel({
+  id: FOREGROUND_CHANNEL_ID,
   name: "Temporizador",
-  importance: Notifications.AndroidImportance.LOW,
-  sound: null,
-  vibrationPattern: [],
-  lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+  importance: AndroidImportance.LOW,
+  vibration: false,
  });
 
- await Notifications.setNotificationChannelAsync(TIMER_ALERT_CHANNEL_ID, {
+ await notifee.createChannel({
+  id: ALERT_CHANNEL_ID,
   name: "Alertas del temporizador",
-  importance: Notifications.AndroidImportance.HIGH,
+  importance: AndroidImportance.HIGH,
+  vibration: true,
   sound: "default",
-  vibrationPattern: [0, 200, 200, 200],
-  lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
  });
 }
 
-async function ensureCategoryConfigured() {
- await Notifications.setNotificationCategoryAsync(TIMER_CATEGORY_ID, [
-  {
-   identifier: TIMER_NOTIFICATION_ACTIONS.PAUSE,
-   buttonTitle: "Pausar",
-   options: { opensAppToForeground: true },
+async function updateForegroundNotification(snapshot: TimerSnapshot, config: TimerConfig) {
+ await notifee.displayNotification({
+  id: FOREGROUND_NOTIFICATION_ID,
+  title: getStatusTitle(snapshot),
+  body: buildStatusBody(snapshot, config),
+  android: {
+   channelId: FOREGROUND_CHANNEL_ID,
+   asForegroundService: true,
+   ongoing: true,
+   onlyAlertOnce: true,
+   pressAction: { id: "default" },
+   actions: [
+    { title: "Pausar", pressAction: { id: TIMER_NOTIFICATION_ACTIONS.PAUSE } },
+    { title: "Saltar", pressAction: { id: TIMER_NOTIFICATION_ACTIONS.SKIP } },
+   ],
   },
-  {
-   identifier: TIMER_NOTIFICATION_ACTIONS.SKIP,
-   buttonTitle: "Saltar",
-   options: { opensAppToForeground: true },
-  },
- ]);
+ });
 }
 
-export async function prepareTimerNotifications() {
- if (Platform.OS === "web") return false;
+async function showBeepNotification(snapshot: TimerSnapshot, kind: "short" | "long") {
+ const phaseLabel = getPhaseLabel(snapshot.phase);
+ const timeLabel = snapshot.remaining === 0 ? "00:00" : formatTime(snapshot.remaining);
+ const toneLabel = kind === "long" ? "Fin de fase" : "Aviso";
 
- const settings = await Notifications.getPermissionsAsync();
- if (settings.status !== "granted") {
-  const requested = await Notifications.requestPermissionsAsync();
-  if (requested.status !== "granted") return false;
- }
+ await notifee.displayNotification({
+  id: ALERT_NOTIFICATION_ID,
+  title: toneLabel,
+  body: `${phaseLabel} - ${timeLabel}`,
+  android: {
+   channelId: ALERT_CHANNEL_ID,
+   pressAction: { id: "default" },
+   timeoutAfter: 3500,
+   onlyAlertOnce: false,
+  },
+ });
+}
 
+export async function ensureTimerNotificationsReady() {
+ if (Platform.OS !== "android") return false;
+ const settings = await notifee.requestPermission();
  await ensureChannelsConfigured();
- await ensureCategoryConfigured();
- return true;
+ return settings.authorizationStatus === AuthorizationStatus.AUTHORIZED;
 }
 
-export async function scheduleTimerNotifications({
- config,
- snapshot,
-}: {
- config: TimerConfig;
- snapshot: TimerNotificationState;
-}): Promise<ScheduleResult> {
- if (Platform.OS === "web") return { scheduledIds: [], statusNotificationId: null };
- if (snapshot.status !== "running") return { scheduledIds: [], statusNotificationId: null };
+export async function persistTimerState(state: StoredTimerState) {
+ await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
- const statusNotificationId = await Notifications.scheduleNotificationAsync({
-  content: buildStatusContent(snapshot, config),
-  trigger: null,
- });
+export async function readStoredTimerState(): Promise<StoredTimerState | null> {
+ const raw = await AsyncStorage.getItem(STORAGE_KEY);
+ return parseStoredState(raw);
+}
 
- const events = buildPhaseEvents(snapshot, config);
- const scheduledIds: string[] = [];
- for (const event of events) {
-  const id = await Notifications.scheduleNotificationAsync({
-   content: buildAlertContent(event, config),
-   trigger: { seconds: event.offsetSeconds },
-  });
-  scheduledIds.push(id);
+export async function clearStoredTimerState() {
+ await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
+export function getCurrentTimerSnapshot(stored: StoredTimerState, now = Date.now()): TimerSnapshot {
+ const elapsedMs = now - stored.updatedAt;
+ const elapsedSeconds = elapsedMs > 0 ? Math.floor(elapsedMs / 1000) : 0;
+ return advanceTimerBySeconds(stored.snapshot, stored.config, elapsedSeconds);
+}
+
+export async function startTimerForegroundService(state: StoredTimerState) {
+ if (Platform.OS !== "android") return;
+ await ensureChannelsConfigured();
+ await persistTimerState(state);
+ const snapshot = getCurrentTimerSnapshot(state, Date.now());
+ await updateForegroundNotification(snapshot, state.config);
+}
+
+export async function stopTimerForegroundService() {
+ if (Platform.OS !== "android") return;
+ try {
+  await notifee.stopForegroundService();
+ } catch {
+ }
+ try {
+  await notifee.cancelNotification(FOREGROUND_NOTIFICATION_ID);
+ } catch {
+ }
+}
+
+export async function handleTimerNotificationAction(actionId: string) {
+ if (Platform.OS !== "android") return;
+ if (actionId !== TIMER_NOTIFICATION_ACTIONS.PAUSE && actionId !== TIMER_NOTIFICATION_ACTIONS.SKIP) return;
+
+ const stored = await readStoredTimerState();
+ if (!stored) return;
+
+ const now = Date.now();
+ const current = getCurrentTimerSnapshot(stored, now);
+ let next = current;
+
+ if (actionId === TIMER_NOTIFICATION_ACTIONS.PAUSE) {
+  if (current.status === "running" || current.status === "holding") {
+   next = { ...current, status: "paused" };
+  }
  }
 
- return { scheduledIds, statusNotificationId };
+ if (actionId === TIMER_NOTIFICATION_ACTIONS.SKIP) {
+  next = applySkipTransition(current, stored.config);
+ }
+
+ await persistTimerState({ config: stored.config, snapshot: next, updatedAt: now });
+
+ if (next.status === "paused" || next.status === "done") {
+  await stopTimerForegroundService();
+  return;
+ }
+
+ await updateForegroundNotification(next, stored.config);
 }
 
-export async function clearTimerNotifications(ids: string[], statusNotificationId: string | null) {
- if (Platform.OS === "web") return;
- const allIds = statusNotificationId ? [statusNotificationId, ...ids] : [...ids];
- await Promise.all(
-  allIds.map(async (id) => {
-   try {
-    await Notifications.cancelScheduledNotificationAsync(id);
-   } catch {
-   }
-   try {
-    await Notifications.dismissNotificationAsync(id);
-   } catch {
-   }
-  })
- );
-}
+export function registerTimerForegroundService() {
+ if (Platform.OS !== "android") return;
 
-export function isTimerNotificationResponse(response: Notifications.NotificationResponse) {
- const source = response.notification.request.content.data?.source;
- return source === TIMER_NOTIFICATION_SOURCE;
+ notifee.registerForegroundService(async () => {
+  await ensureChannelsConfigured();
+  return new Promise<void>((resolve) => {
+   let lastBeepKey: string | null = null;
+   let stopped = false;
+   let inFlight = false;
+
+  const interval = setInterval(async () => {
+    if (stopped || inFlight) return;
+    inFlight = true;
+    try {
+     const stored = await readStoredTimerState();
+     if (!stored) {
+      stopped = true;
+      clearInterval(interval);
+      await stopTimerForegroundService();
+      resolve();
+      return;
+     }
+
+     const snapshot = getCurrentTimerSnapshot(stored, Date.now());
+     if (snapshot.status === "paused" || snapshot.status === "done") {
+      stopped = true;
+      clearInterval(interval);
+      await stopTimerForegroundService();
+      resolve();
+      return;
+     }
+
+     await updateForegroundNotification(snapshot, stored.config);
+
+     const beepKind = getBeepKind(snapshot);
+     if (beepKind) {
+      const key = `${snapshot.phase}:${snapshot.remaining}:${beepKind}`;
+      if (lastBeepKey !== key) {
+       lastBeepKey = key;
+      await showBeepNotification(snapshot, beepKind);
+      }
+     }
+    } finally {
+     inFlight = false;
+    }
+   }, 1000);
+
+  });
+ });
 }
