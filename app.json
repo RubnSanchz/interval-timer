@@ -14,6 +14,7 @@
     "android": {
       "package": "com.rubnsanchz.intervaltimer",
       "versionCode": 1,
+      "permissions": ["FOREGROUND_SERVICE", "POST_NOTIFICATIONS"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -29,7 +30,6 @@
     },
     "plugins": [
       "expo-router",
-      "@notifee/react-native",
       [
         "expo-splash-screen",
         {
