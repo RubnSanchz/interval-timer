@@ -45,8 +45,8 @@ export function useFeedback() {
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
-          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+          interruptionModeIOS: InterruptionModeIOS.DuckOthers,
         });
       } catch {
       }
