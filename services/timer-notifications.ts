@@ -231,6 +231,11 @@ export async function stopTimerForegroundService() {
  } catch (error) {
   logTimerError("cancel-foreground-notification", error);
  }
+ try {
+  await notifee.cancelNotification(ALERT_NOTIFICATION_ID);
+ } catch (error) {
+  logTimerError("cancel-alert-notification", error);
+ }
 }
 
 export async function handleTimerNotificationAction(actionId: string) {

@@ -2,7 +2,7 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { useAppTheme, type ThemePreference } from "@/hooks/use-app-theme";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import Slider from "@react-native-community/slider";
-import { Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const OPTIONS: { value: ThemePreference; title: string; description: string }[] = [
@@ -43,6 +43,39 @@ export default function SettingsScreen() {
  const rawSoundIndex = SOUND_LEVELS.findIndex((level) => Math.abs(soundVolume - level.value) < 0.05);
  const activeSoundIndex = rawSoundIndex >= 0 ? rawSoundIndex : 2;
  const soundLabel = SOUND_LEVELS[activeSoundIndex]?.title ?? "Medio";
+
+ const handleFloatingBubbleToggle = (enabled: boolean) => {
+  if (!enabled) {
+   setAndroidFloatingBubbleEnabled(false);
+   return;
+  }
+
+  if (Platform.OS !== "android") {
+   setAndroidFloatingBubbleEnabled(false);
+   return;
+  }
+
+  Alert.alert(
+   "Permiso necesario",
+   "La burbuja flotante necesita permiso para mostrarse sobre otras apps. Activa el permiso en ajustes del sistema.",
+   [
+    {
+     text: "Cancelar",
+     style: "cancel",
+     onPress: () => setAndroidFloatingBubbleEnabled(false),
+    },
+    {
+     text: "Abrir ajustes",
+     onPress: () => {
+      setAndroidFloatingBubbleEnabled(true);
+      void Linking.openSettings().catch(() => {
+       setAndroidFloatingBubbleEnabled(false);
+      });
+     },
+    },
+   ],
+  );
+ };
 
  return (
   <SafeAreaView style={StyleSheet.flatten([styles.screen, { backgroundColor }])} edges={["top"]}>
@@ -210,7 +243,7 @@ export default function SettingsScreen() {
         </View>
         <Switch
          value={androidFloatingBubbleEnabled}
-         onValueChange={setAndroidFloatingBubbleEnabled}
+         onValueChange={handleFloatingBubbleToggle}
          trackColor={{ false: switchTrackOff, true: tintColor }}
          thumbColor={switchThumb}
         />

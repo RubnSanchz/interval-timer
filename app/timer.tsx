@@ -1,4 +1,5 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import type { TimerConfig } from "@/domain/models/TimerConfig";
 import { validateTimerConfig } from "@/domain/validators/validateTimerConfig";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useFeedback } from "@/hooks/use-feedback";
@@ -39,13 +40,6 @@ export default function TimerScreen() {
  const mutedTextColor = useThemeColor({ light: "#666", dark: "#9ba1a6" }, "text");
  const primaryBackground = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
  const primaryText = useThemeColor({ light: "white", dark: "#111" }, "text");
- const secondaryBorder = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
- const secondaryText = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
- const ghostBorder = useThemeColor({ light: "#bbb", dark: "#333" }, "text");
- const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
- const ghostBackground = useThemeColor({ light: "#F3F4F6", dark: "#1E2023" }, "background");
- const { playBeep } = useFeedback();
- const { keepAwakeEnabled } = useAppSettings();
  const params = useLocalSearchParams<{
   sets?: string | string[];
   exerciseSeconds?: string | string[];
@@ -95,7 +89,23 @@ export default function TimerScreen() {
   );
  }
 
- const config = configResult.config;
+ return <TimerActiveScreen config={configResult.config} />;
+}
+
+function TimerActiveScreen({ config }: { config: TimerConfig }) {
+ const router = useRouter();
+ const backgroundColor = useThemeColor({}, "background");
+ const textColor = useThemeColor({}, "text");
+ const mutedTextColor = useThemeColor({ light: "#666", dark: "#9ba1a6" }, "text");
+ const primaryBackground = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+ const primaryText = useThemeColor({ light: "white", dark: "#111" }, "text");
+ const secondaryBorder = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+ const secondaryText = useThemeColor({ light: "#111", dark: "#ECEDEE" }, "text");
+ const ghostBorder = useThemeColor({ light: "#bbb", dark: "#333" }, "text");
+ const ghostText = useThemeColor({ light: "#444", dark: "#9ba1a6" }, "text");
+ const ghostBackground = useThemeColor({ light: "#F3F4F6", dark: "#1E2023" }, "background");
+ const { playBeep } = useFeedback();
+ const { keepAwakeEnabled } = useAppSettings();
  const [phase, setPhase] = useState<Phase>(PREP_SECONDS > 0 ? "prep" : "exercise");
  const [setIndex, setSetIndex] = useState(1);
  const [remaining, setRemaining] = useState(PREP_SECONDS > 0 ? PREP_SECONDS : config.exerciseSeconds);
@@ -162,7 +172,7 @@ export default function TimerScreen() {
   setPending(snapshot.pending);
   resetTickClock();
   await clearStoredTimerState();
- }, [clearStoredTimerState, getCurrentTimerSnapshot, isSameConfig, readStoredTimerState, resetTickClock]);
+ }, [resetTickClock]);
 
  useEffect(() => {
   timerStateRef.current = { phase, setIndex, remaining, status, pending };
@@ -197,20 +207,20 @@ export default function TimerScreen() {
    }
   });
   return () => subscription.remove();
- }, [clearScheduledBeeps, hydrateTimerFromStorage, startTimerForegroundService, stopTimerForegroundService]);
+ }, [clearScheduledBeeps, hydrateTimerFromStorage]);
 
  useEffect(() => {
   if (status === "running" || status === "holding") return;
   clearScheduledBeeps();
   void stopTimerForegroundService();
- }, [clearScheduledBeeps, status, stopTimerForegroundService]);
+ }, [clearScheduledBeeps, status]);
 
  useEffect(() => {
   return () => {
    void stopTimerForegroundService();
    clearScheduledBeeps();
   };
- }, [clearScheduledBeeps, stopTimerForegroundService]);
+ }, [clearScheduledBeeps]);
 
  useEffect(() => {
   if (status === "running") {
@@ -306,7 +316,7 @@ export default function TimerScreen() {
   resetTickClock();
  }
 
- function skipSet() {
+ const skipSet = useCallback(() => {
   if (status === "done") return;
 
   if (phase === "prep") {
@@ -360,11 +370,11 @@ export default function TimerScreen() {
   setStatus("running");
   setPending(null);
   resetTickClock();
- }
+ }, [config.exerciseSeconds, config.restSeconds, config.sets, phase, resetTickClock, setIndex, status]);
 
- function pauseTimer() {
+ const pauseTimer = useCallback(() => {
   if (status === "running") setStatus("paused");
- }
+ }, [status]);
 
  function resumeTimer() {
   if (status !== "paused") return;
