@@ -1,8 +1,14 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import notifee, { AndroidImportance, AuthorizationStatus } from "@notifee/react-native";
 import type { TimerConfig } from "@/domain/models/TimerConfig";
+import {
+  advanceTimerBySeconds,
+  advanceTimerBySecondsWithBeeps,
+  applySkipTransition,
+  type BeepEvent,
+  type TimerSnapshot,
+} from "@/services/timer-state";
 import { formatTime } from "@/utils/formatTime";
-import { advanceTimerBySeconds, applySkipTransition, type TimerSnapshot } from "@/services/timer-state";
+import notifee, { AndroidImportance, AuthorizationStatus } from "@notifee/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 export const TIMER_NOTIFICATION_ACTIONS = {
@@ -18,9 +24,18 @@ export type StoredTimerState = {
 
 const STORAGE_KEY = "intervalTimer.timerState.v2";
 const FOREGROUND_CHANNEL_ID = "timer-foreground";
-const ALERT_CHANNEL_ID = "timer-alerts";
+const ALERT_CHANNEL_ID_SHORT = "timer-alerts-short-v1";
+const ALERT_CHANNEL_ID_LONG = "timer-alerts-long-v1";
+const ALERT_SOUND_SHORT = "beep_short";
+const ALERT_SOUND_LONG = "beep_long";
 const FOREGROUND_NOTIFICATION_ID = "timer-foreground";
 const ALERT_NOTIFICATION_ID = "timer-alert";
+const ALERT_MIN_GAP_MS = 320;
+
+function logTimerError(scope: string, error: unknown) {
+ const message = error instanceof Error ? error.message : String(error);
+ console.warn(`[timer:${scope}] ${message}`);
+}
 
 function isValidSnapshot(snapshot: unknown): snapshot is TimerSnapshot {
  if (!snapshot || typeof snapshot !== "object") return false;
@@ -99,18 +114,6 @@ function buildStatusBody(snapshot: TimerSnapshot, config: TimerConfig) {
  return `Fase: ${phaseLabel} - ${timeLabel} - ${setLabel}`;
 }
 
-function getBeepKind(snapshot: TimerSnapshot): "short" | "long" | null {
- if (snapshot.status !== "running") return null;
- if (snapshot.phase === "rest" && (snapshot.remaining === 2 || snapshot.remaining === 1 || snapshot.remaining === 0)) {
-  return "short";
- }
- if (snapshot.phase === "exercise") {
-  if (snapshot.remaining === 2 || snapshot.remaining === 1) return "short";
-  if (snapshot.remaining === 0) return "long";
- }
- return null;
-}
-
 async function ensureChannelsConfigured() {
  if (Platform.OS !== "android") return;
 
@@ -122,11 +125,19 @@ async function ensureChannelsConfigured() {
  });
 
  await notifee.createChannel({
-  id: ALERT_CHANNEL_ID,
+  id: ALERT_CHANNEL_ID_SHORT,
   name: "Alertas del temporizador",
   importance: AndroidImportance.HIGH,
   vibration: true,
-  sound: "default",
+  sound: ALERT_SOUND_SHORT,
+ });
+
+ await notifee.createChannel({
+  id: ALERT_CHANNEL_ID_LONG,
+  name: "Alertas del temporizador (final)",
+  importance: AndroidImportance.HIGH,
+  vibration: true,
+  sound: ALERT_SOUND_LONG,
  });
 }
 
@@ -149,20 +160,21 @@ async function updateForegroundNotification(snapshot: TimerSnapshot, config: Tim
  });
 }
 
-async function showBeepNotification(snapshot: TimerSnapshot, kind: "short" | "long") {
+async function showBeepNotification(snapshot: TimerSnapshot, kind: "short" | "long", channelId: string) {
  const phaseLabel = getPhaseLabel(snapshot.phase);
  const timeLabel = snapshot.remaining === 0 ? "00:00" : formatTime(snapshot.remaining);
  const toneLabel = kind === "long" ? "Fin de fase" : "Aviso";
-
  await notifee.displayNotification({
   id: ALERT_NOTIFICATION_ID,
   title: toneLabel,
   body: `${phaseLabel} - ${timeLabel}`,
   android: {
-   channelId: ALERT_CHANNEL_ID,
+   channelId,
    pressAction: { id: "default" },
    timeoutAfter: 3500,
    onlyAlertOnce: false,
+   showTimestamp: true,
+   timestamp: Date.now(),
   },
  });
 }
@@ -202,7 +214,8 @@ export async function startTimerForegroundService(state: StoredTimerState) {
   await ensureChannelsConfigured();
   const snapshot = getCurrentTimerSnapshot(state, Date.now());
   await updateForegroundNotification(snapshot, state.config);
- } catch {
+ } catch (error) {
+  logTimerError("start-service", error);
  }
 }
 
@@ -210,11 +223,13 @@ export async function stopTimerForegroundService() {
  if (Platform.OS !== "android") return;
  try {
   await notifee.stopForegroundService();
- } catch {
+ } catch (error) {
+  logTimerError("stop-service", error);
  }
  try {
   await notifee.cancelNotification(FOREGROUND_NOTIFICATION_ID);
- } catch {
+ } catch (error) {
+  logTimerError("cancel-foreground-notification", error);
  }
 }
 
@@ -255,7 +270,8 @@ export function registerTimerForegroundService() {
  notifee.registerForegroundService(async () => {
   await ensureChannelsConfigured();
   return new Promise<void>((resolve) => {
-   let lastBeepKey: string | null = null;
+   let lastAlertAt = 0;
+   let lastAlertChannelId: string | null = null;
    let stopped = false;
    let inFlight = false;
 
@@ -272,7 +288,51 @@ export function registerTimerForegroundService() {
       return;
      }
 
-     const snapshot = getCurrentTimerSnapshot(stored, Date.now());
+     const now = Date.now();
+     const elapsedSeconds = Math.max(0, Math.floor((now - stored.updatedAt) / 1000));
+     let snapshot = stored.snapshot;
+     let beepEvents: BeepEvent[] = [];
+
+     if (elapsedSeconds > 0) {
+      const result = advanceTimerBySecondsWithBeeps(stored.snapshot, stored.config, elapsedSeconds);
+      snapshot = result.snapshot;
+      beepEvents = result.beeps;
+     }
+
+     const consumedAt = stored.updatedAt + elapsedSeconds * 1000;
+     await persistTimerState({
+      config: stored.config,
+      snapshot,
+      updatedAt: consumedAt,
+     });
+
+     if (beepEvents.length > 0) {
+      const tickStartedAt = now;
+      let lastOffset: number | null = null;
+      for (const event of beepEvents) {
+       const nowTime = Date.now();
+       const secondsBehind = Math.max(0, elapsedSeconds - event.offsetSeconds);
+       const desiredAt = tickStartedAt - secondsBehind * 1000;
+       const offsetGapMs =
+        lastOffset === null ? 0 : Math.max((event.offsetSeconds - lastOffset) * 1000, ALERT_MIN_GAP_MS);
+       const scheduledAt = Math.max(desiredAt, nowTime, lastAlertAt + offsetGapMs);
+       const delayMs = scheduledAt - nowTime;
+       lastAlertAt = scheduledAt;
+       lastOffset = event.offsetSeconds;
+       if (delayMs > 0) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
+       }
+       const channelId = event.kind === "long" ? ALERT_CHANNEL_ID_LONG : ALERT_CHANNEL_ID_SHORT;
+       if (channelId !== lastAlertChannelId) {
+        try {
+         await notifee.cancelNotification(ALERT_NOTIFICATION_ID);
+        } catch {}
+        lastAlertChannelId = channelId;
+       }
+       await showBeepNotification(event.snapshot, event.kind, channelId);
+      }
+     }
+
      if (snapshot.status === "paused" || snapshot.status === "done") {
       stopped = true;
       clearInterval(interval);
@@ -282,15 +342,8 @@ export function registerTimerForegroundService() {
      }
 
      await updateForegroundNotification(snapshot, stored.config);
-
-     const beepKind = getBeepKind(snapshot);
-     if (beepKind) {
-      const key = `${snapshot.phase}:${snapshot.remaining}:${beepKind}`;
-      if (lastBeepKey !== key) {
-       lastBeepKey = key;
-       await showBeepNotification(snapshot, beepKind);
-      }
-     }
+    } catch (error) {
+     logTimerError("foreground-service-loop", error);
     } finally {
      inFlight = false;
     }

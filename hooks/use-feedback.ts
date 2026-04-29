@@ -33,12 +33,16 @@ export function useFeedback() {
   const effectiveVolume = useMemo(() => scaleVolume(soundVolume), [soundVolume]);
   const initialVolume = useRef(effectiveVolume);
   const [hapticsAvailable, setHapticsAvailable] = useState<boolean | null>(null);
+  const audioReadyRef = useRef(false);
+  const audioModePromiseRef = useRef<Promise<boolean> | null>(null);
 
-  useEffect(() => {
-    let isActive = true;
-    async function configureAudio() {
+  const ensureAudioMode = useCallback(async () => {
+    if (Platform.OS === "web") return false;
+    if (audioReadyRef.current) return true;
+    if (audioModePromiseRef.current) return audioModePromiseRef.current;
+
+    const task = (async () => {
       try {
-        if (Platform.OS === "web") return;
         await Audio.setIsEnabledAsync(true);
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
@@ -46,8 +50,28 @@ export function useFeedback() {
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
           interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-          interruptionModeIOS: InterruptionModeIOS.DuckOthers,
+          interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
         });
+        audioReadyRef.current = true;
+        return true;
+      } catch {
+        audioReadyRef.current = false;
+        return false;
+      } finally {
+        audioModePromiseRef.current = null;
+      }
+    })();
+
+    audioModePromiseRef.current = task;
+    return task;
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    async function configureAudio() {
+      try {
+        if (Platform.OS === "web") return;
+        await ensureAudioMode();
       } catch {
       }
     }
@@ -68,12 +92,13 @@ export function useFeedback() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [ensureAudioMode]);
 
   useEffect(() => {
     let isActive = true;
     async function loadSound(kind: BeepKind, asset: number) {
       try {
+        await ensureAudioMode();
         const { sound } = await Audio.Sound.createAsync(asset, {
           volume: initialVolume.current,
           shouldPlay: false,
@@ -95,7 +120,7 @@ export function useFeedback() {
       current.short?.unloadAsync().catch(() => {});
       current.long?.unloadAsync().catch(() => {});
     };
-  }, []);
+  }, [ensureAudioMode]);
 
   useEffect(() => {
     const current = soundRefs.current;
@@ -135,25 +160,41 @@ export function useFeedback() {
     async (kind: BeepKind) => {
       void triggerBeepHaptics(kind);
       if (effectiveVolume <= 0) return;
+      await ensureAudioMode();
+      const asset = kind === "short" ? SHORT_BEEP : LONG_BEEP;
+
+      const createAndPlay = async () => {
+        const { sound: newSound } = await Audio.Sound.createAsync(asset, {
+          volume: effectiveVolume,
+          shouldPlay: true,
+        });
+        soundRefs.current[kind] = newSound;
+      };
+
       const sound = soundRefs.current[kind];
       if (!sound) {
         try {
-          const asset = kind === "short" ? SHORT_BEEP : LONG_BEEP;
-          const { sound: newSound } = await Audio.Sound.createAsync(asset, {
-            volume: effectiveVolume,
-            shouldPlay: true,
-          });
-          soundRefs.current[kind] = newSound;
+          await createAndPlay();
         } catch {
         }
         return;
       }
       try {
+        await sound.setVolumeAsync(effectiveVolume);
         await sound.replayAsync();
       } catch {
+        try {
+          await sound.unloadAsync();
+        } catch {
+        }
+        soundRefs.current[kind] = null;
+        try {
+          await createAndPlay();
+        } catch {
+        }
       }
     },
-    [effectiveVolume, triggerBeepHaptics]
+    [effectiveVolume, ensureAudioMode, triggerBeepHaptics]
   );
 
   const triggerHaptics = useCallback(

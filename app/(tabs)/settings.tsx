@@ -2,7 +2,7 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { useAppTheme, type ThemePreference } from "@/hooks/use-app-theme";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import Slider from "@react-native-community/slider";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const OPTIONS: { value: ThemePreference; title: string; description: string }[] = [
@@ -20,8 +20,16 @@ const SOUND_LEVELS: { value: number; title: string }[] = [
 
 export default function SettingsScreen() {
  const { preference, setPreference } = useAppTheme();
- const { hapticsEnabled, setHapticsEnabled, keepAwakeEnabled, setKeepAwakeEnabled, soundVolume, setSoundVolume } =
-  useAppSettings();
+ const {
+  hapticsEnabled,
+  setHapticsEnabled,
+  keepAwakeEnabled,
+  setKeepAwakeEnabled,
+  soundVolume,
+  setSoundVolume,
+  androidFloatingBubbleEnabled,
+  setAndroidFloatingBubbleEnabled,
+ } = useAppSettings();
  const backgroundColor = useThemeColor({}, "background");
  const textColor = useThemeColor({}, "text");
  const mutedTextColor = useThemeColor({ light: "#555", dark: "#9ba1a6" }, "text");
@@ -159,6 +167,57 @@ export default function SettingsScreen() {
       />
      </View>
     </View>
+
+    {Platform.OS === "android" && (
+     <>
+      <Text style={StyleSheet.flatten([styles.sectionTitle, { color: textColor }])}>Android en segundo plano</Text>
+      <Text style={StyleSheet.flatten([styles.subTitle, { color: mutedTextColor }])}>Modo por defecto</Text>
+      <View style={styles.options}>
+       <View
+        style={StyleSheet.flatten([
+         styles.option,
+         {
+          borderColor,
+          backgroundColor: cardBackground,
+         },
+        ])}
+       >
+        <View style={styles.optionText}>
+         <Text style={StyleSheet.flatten([styles.optionTitle, { color: textColor }])}>Notificacion persistente</Text>
+         <Text style={StyleSheet.flatten([styles.optionDescription, { color: mutedTextColor }])}>
+          Se mantiene activa al minimizar para controlar el timer
+         </Text>
+        </View>
+       </View>
+      </View>
+
+      <Text style={StyleSheet.flatten([styles.subTitle, { color: mutedTextColor }])}>Burbuja flotante (opcional)</Text>
+      <View style={styles.options}>
+       <View
+        style={StyleSheet.flatten([
+         styles.option,
+         {
+          borderColor,
+          backgroundColor: androidFloatingBubbleEnabled ? selectedBackground : cardBackground,
+         },
+        ])}
+       >
+        <View style={styles.optionText}>
+         <Text style={StyleSheet.flatten([styles.optionTitle, { color: textColor }])}>Activar burbuja flotante</Text>
+         <Text style={StyleSheet.flatten([styles.optionDescription, { color: mutedTextColor }])}>
+          Requiere permiso de mostrar sobre otras apps. Si falla, se usa notificacion persistente.
+         </Text>
+        </View>
+        <Switch
+         value={androidFloatingBubbleEnabled}
+         onValueChange={setAndroidFloatingBubbleEnabled}
+         trackColor={{ false: switchTrackOff, true: tintColor }}
+         thumbColor={switchThumb}
+        />
+       </View>
+      </View>
+     </>
+    )}
    </View>
   </SafeAreaView>
  );
