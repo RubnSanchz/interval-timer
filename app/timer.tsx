@@ -5,10 +5,13 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import {
+    clearPendingBeepTransition,
     clearStoredTimerState,
     getCurrentTimerSnapshot,
+    getPendingBeepTransition,
     readStoredTimerState,
     recordAppState,
+    recordBeepDuringTransition,
     startTimerForegroundService,
     stopTimerForegroundService,
     TIMER_NOTIFICATION_ACTIONS,
@@ -146,7 +149,14 @@ function TimerActiveScreen({ config }: { config: TimerConfig }) {
     lastOffset = event.offsetSeconds;
 
     const delayMs = scheduledAt - tickStartedAt;
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
+     // Check if app is still in foreground when beep is scheduled
+     if (appStateRef.current !== "active") {
+      // App went to background - record this beep for rescheduling
+      void recordAppState("background"); // Ensure app state is recorded
+      await recordBeepDuringTransition(event.kind);
+      return;
+     }
      playBeep(event.kind);
     }, delayMs);
     beepTimeoutsRef.current.push(timeoutId);
@@ -156,6 +166,20 @@ function TimerActiveScreen({ config }: { config: TimerConfig }) {
   },
   [playBeep],
  );
+
+ const rescheduleTransitionBeep = useCallback(async () => {
+  const pending = await getPendingBeepTransition();
+  if (!pending) return;
+
+  // Schedule the pending beep with a short delay to ensure it doesn't duplicate
+  const delayMs = BEEP_MIN_GAP_MS;
+  const timeoutId = setTimeout(() => {
+   playBeep(pending.kind);
+  }, delayMs);
+  beepTimeoutsRef.current.push(timeoutId);
+
+  await clearPendingBeepTransition();
+ }, [playBeep]);
 
  const hydrateTimerFromStorage = useCallback(async () => {
   const stored = await readStoredTimerState();
@@ -209,10 +233,11 @@ function TimerActiveScreen({ config }: { config: TimerConfig }) {
     clearScheduledBeeps();
     void stopTimerForegroundService();
     void hydrateTimerFromStorage();
+    void rescheduleTransitionBeep();
    }
   });
   return () => subscription.remove();
- }, [clearScheduledBeeps, hydrateTimerFromStorage]);
+ }, [clearScheduledBeeps, hydrateTimerFromStorage, rescheduleTransitionBeep]);
 
  useEffect(() => {
   if (status === "running" || status === "holding") return;

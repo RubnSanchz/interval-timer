@@ -26,6 +26,7 @@ export type StoredTimerState = {
 const STORAGE_KEY = "intervalTimer.timerState.v2";
 const SETTINGS_STORAGE_KEY = "intervalTimer.settings.v1";
 const APP_STATE_STORAGE_KEY = "intervalTimer.appState";
+const PENDING_BEEPS_STORAGE_KEY = "intervalTimer.pendingBeeps";
 const FOREGROUND_CHANNEL_ID = "timer-foreground";
 const ALERT_CHANNEL_ID_SHORT = "timer-alerts-short-v1";
 const ALERT_CHANNEL_ID_LONG = "timer-alerts-long-v1";
@@ -37,9 +38,15 @@ const ALERT_MIN_GAP_MS = 320;
 const WATCHDOG_TICK_TIMEOUT_MS = 3000;
 const WATCHDOG_MAX_MISSED_TICKS = 3;
 const BREADCRUMB_MAX_SIZE = 50;
+const BEEP_TRANSITION_TIMEOUT_MS = 2000; // Max time to wait for reschedule before discarding
 
 type StoredAppSettings = {
  androidFloatingBubbleEnabled?: boolean;
+};
+
+type PendingBeepTransition = {
+ kind: "short" | "long";
+ scheduledAt: number;
 };
 
 type BreadcrumbEntry = {
@@ -100,6 +107,45 @@ async function isAppInForeground(): Promise<boolean> {
  } catch {
   return false;
  }
+}
+
+export async function recordBeepDuringTransition(kind: "short" | "long") {
+ try {
+  const pending: PendingBeepTransition = {
+   kind,
+   scheduledAt: Date.now(),
+  };
+  await AsyncStorage.setItem(PENDING_BEEPS_STORAGE_KEY, JSON.stringify(pending));
+  addBreadcrumb("beep-transition", `Beep recorded during state change (${kind})`, "warn");
+ } catch (error) {
+  logTimerError("beep-transition-storage", error);
+ }
+}
+
+export async function getPendingBeepTransition(): Promise<PendingBeepTransition | null> {
+ try {
+  const raw = await AsyncStorage.getItem(PENDING_BEEPS_STORAGE_KEY);
+  if (!raw) return null;
+  const pending = JSON.parse(raw) as PendingBeepTransition;
+  const elapsedMs = Date.now() - pending.scheduledAt;
+
+  if (elapsedMs > BEEP_TRANSITION_TIMEOUT_MS) {
+   // Beep is too old, discard it
+   await AsyncStorage.removeItem(PENDING_BEEPS_STORAGE_KEY);
+   addBreadcrumb("beep-transition", `Discarded stale pending beep (${elapsedMs}ms old)`, "info");
+   return null;
+  }
+
+  return pending;
+ } catch {
+  return null;
+ }
+}
+
+export async function clearPendingBeepTransition() {
+ try {
+  await AsyncStorage.removeItem(PENDING_BEEPS_STORAGE_KEY);
+ } catch {}
 }
 
 function recordHeartbeat() {
