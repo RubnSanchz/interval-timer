@@ -1,7 +1,11 @@
 {
-  "editor.codeActionsOnSave": {
-    "source.fixAll": "explicit",
-    "source.organizeImports": "explicit",
-    "source.sortMembers": "explicit"
-  }
+ "editor.codeActionsOnSave": {
+  "source.fixAll": "explicit",
+  "source.organizeImports": "explicit",
+  "source.sortMembers": "explicit"
+ },
+ "chat.tools.terminal.autoApprove": {
+  "timeout": true,
+  "npx eslint": true
+ }
 }

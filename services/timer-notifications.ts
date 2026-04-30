@@ -33,14 +33,87 @@ const ALERT_SOUND_LONG = "beep_long";
 const FOREGROUND_NOTIFICATION_ID = "timer-foreground";
 const ALERT_NOTIFICATION_ID = "timer-alert";
 const ALERT_MIN_GAP_MS = 320;
+const WATCHDOG_TICK_TIMEOUT_MS = 3000;
+const WATCHDOG_MAX_MISSED_TICKS = 3;
+const BREADCRUMB_MAX_SIZE = 50;
 
 type StoredAppSettings = {
  androidFloatingBubbleEnabled?: boolean;
 };
 
+type BreadcrumbEntry = {
+ timestamp: number;
+ scope: string;
+ message: string;
+ level: "info" | "warn" | "error";
+};
+
+let breadcrumbs: BreadcrumbEntry[] = [];
+let serviceWatchdog: {
+ lastHeartbeat: number;
+ missedTicks: number;
+ isRunning: boolean;
+} = {
+ lastHeartbeat: 0,
+ missedTicks: 0,
+ isRunning: false,
+};
+
+function addBreadcrumb(scope: string, message: string, level: "info" | "warn" | "error" = "info") {
+ const entry: BreadcrumbEntry = {
+  timestamp: Date.now(),
+  scope,
+  message,
+  level,
+ };
+ breadcrumbs.push(entry);
+ if (breadcrumbs.length > BREADCRUMB_MAX_SIZE) {
+  breadcrumbs.shift();
+ }
+ const prefix = level === "error" ? "❌" : level === "warn" ? "⚠️" : "ℹ️";
+ console.log(`${prefix} [timer:${scope}] ${message}`);
+}
+
 function logTimerError(scope: string, error: unknown) {
  const message = error instanceof Error ? error.message : String(error);
- console.warn(`[timer:${scope}] ${message}`);
+ addBreadcrumb(scope, message, "error");
+}
+
+export function getServiceBreadcrumbs(): BreadcrumbEntry[] {
+ return [...breadcrumbs];
+}
+
+function recordHeartbeat() {
+ serviceWatchdog.lastHeartbeat = Date.now();
+ serviceWatchdog.missedTicks = 0;
+ addBreadcrumb("watchdog", "Service heartbeat recorded", "info");
+}
+
+function checkWatchdog(): boolean {
+ const now = Date.now();
+ const timeSinceHeartbeat = now - serviceWatchdog.lastHeartbeat;
+
+ if (timeSinceHeartbeat > WATCHDOG_TICK_TIMEOUT_MS) {
+  serviceWatchdog.missedTicks++;
+  addBreadcrumb(
+   "watchdog",
+   `Missed tick #${serviceWatchdog.missedTicks} (${timeSinceHeartbeat}ms since last heartbeat)`,
+   "warn",
+  );
+
+  if (serviceWatchdog.missedTicks >= WATCHDOG_MAX_MISSED_TICKS) {
+   addBreadcrumb(
+    "watchdog",
+    `Service STUCK after ${serviceWatchdog.missedTicks} missed ticks! Triggering auto-restart...`,
+    "error",
+   );
+   return false;
+  }
+ } else {
+  serviceWatchdog.missedTicks = Math.max(0, serviceWatchdog.missedTicks - 1);
+ }
+
+ return true;
 }
 
 function isValidSnapshot(snapshot: unknown): snapshot is TimerSnapshot {
@@ -333,21 +406,32 @@ export function registerTimerForegroundService() {
 
  notifee.registerForegroundService(async () => {
   await ensureChannelsConfigured();
+  addBreadcrumb("foreground-service", "Service registered, starting loop...", "info");
+  serviceWatchdog.isRunning = true;
+  recordHeartbeat();
+
   return new Promise<void>((resolve) => {
    let lastAlertAt = 0;
    let lastAlertChannelId: string | null = null;
    let stopped = false;
    let inFlight = false;
+   let tickCount = 0;
+   let watchdogInterval: any = null;
 
    const interval = setInterval(async () => {
     if (stopped || inFlight) return;
     inFlight = true;
+    tickCount++;
+
     try {
      const stored = await readStoredTimerState();
      if (!stored) {
+      addBreadcrumb("foreground-service-loop", "No stored state, stopping service", "warn");
       stopped = true;
       clearInterval(interval);
+      if (watchdogInterval) clearInterval(watchdogInterval);
       await stopTimerForegroundService();
+      serviceWatchdog.isRunning = false;
       resolve();
       return;
      }
@@ -398,21 +482,60 @@ export function registerTimerForegroundService() {
      }
 
      if (snapshot.status === "paused" || snapshot.status === "done") {
+      addBreadcrumb("foreground-service-loop", `Timer finished (status: ${snapshot.status})`, "info");
       stopped = true;
       clearInterval(interval);
+      if (watchdogInterval) clearInterval(watchdogInterval);
       await stopTimerForegroundService();
+      serviceWatchdog.isRunning = false;
       resolve();
       return;
      }
 
      await updateForegroundNotification(snapshot, stored.config);
      await updateFloatingBubble(snapshot, stored.config);
+     recordHeartbeat();
+     addBreadcrumb(
+      "foreground-service-loop",
+      `Tick #${tickCount} completed (elapsed: ${elapsedSeconds}s, phase: ${snapshot.phase})`,
+      "info",
+     );
     } catch (error) {
      logTimerError("foreground-service-loop", error);
     } finally {
      inFlight = false;
     }
    }, 1000);
+
+   // Watchdog timer: check if main loop is stuck
+   watchdogInterval = setInterval(async () => {
+    if (stopped) return;
+
+    const isHealthy = checkWatchdog();
+    if (!isHealthy) {
+     addBreadcrumb("watchdog", "Attempting service recovery...", "warn");
+     stopped = true;
+     clearInterval(interval);
+     clearInterval(watchdogInterval);
+
+     try {
+      await stopTimerForegroundService();
+      const stored = await readStoredTimerState();
+      if (stored) {
+       addBreadcrumb("watchdog", `Service restarted (recovered state: ${stored.snapshot.phase})`, "info");
+       await startTimerForegroundService(stored);
+      } else {
+       addBreadcrumb("watchdog", "State recovery failed, stopping service", "error");
+       serviceWatchdog.isRunning = false;
+       resolve();
+      }
+     } catch (recoveryError) {
+      logTimerError("watchdog-recovery", recoveryError);
+      serviceWatchdog.isRunning = false;
+      resolve();
+     }
+    }
+   }, WATCHDOG_TICK_TIMEOUT_MS);
   });
  });
 }
