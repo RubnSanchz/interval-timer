@@ -25,6 +25,7 @@ export type StoredTimerState = {
 
 const STORAGE_KEY = "intervalTimer.timerState.v2";
 const SETTINGS_STORAGE_KEY = "intervalTimer.settings.v1";
+const APP_STATE_STORAGE_KEY = "intervalTimer.appState";
 const FOREGROUND_CHANNEL_ID = "timer-foreground";
 const ALERT_CHANNEL_ID_SHORT = "timer-alerts-short-v1";
 const ALERT_CHANNEL_ID_LONG = "timer-alerts-long-v1";
@@ -81,6 +82,24 @@ function logTimerError(scope: string, error: unknown) {
 
 export function getServiceBreadcrumbs(): BreadcrumbEntry[] {
  return [...breadcrumbs];
+}
+
+export async function recordAppState(state: "active" | "background") {
+ try {
+  await AsyncStorage.setItem(APP_STATE_STORAGE_KEY, state);
+  addBreadcrumb("app-state", `App state updated: ${state}`, "info");
+ } catch (error) {
+  logTimerError("app-state-storage", error);
+ }
+}
+
+async function isAppInForeground(): Promise<boolean> {
+ try {
+  const state = await AsyncStorage.getItem(APP_STATE_STORAGE_KEY);
+  return state === "active";
+ } catch {
+  return false;
+ }
 }
 
 function recordHeartbeat() {
@@ -292,12 +311,19 @@ async function showBeepNotification(snapshot: TimerSnapshot, kind: "short" | "lo
  const phaseLabel = getPhaseLabel(snapshot.phase);
  const timeLabel = snapshot.remaining === 0 ? "00:00" : formatTime(snapshot.remaining);
  const toneLabel = kind === "long" ? "Fin de fase" : "Aviso";
+
+ // Check if app is in foreground - if so, skip audio notification (expo-av will handle it in timer.tsx)
+ const inForeground = await isAppInForeground();
+ const useAudio = !inForeground; // Only use Notifee audio when app is in background
+
+ const channelIdToUse = useAudio ? channelId : FOREGROUND_CHANNEL_ID; // Use silent channel if in foreground
+
  await notifee.displayNotification({
   id: ALERT_NOTIFICATION_ID,
   title: toneLabel,
   body: `${phaseLabel} - ${timeLabel}`,
   android: {
-   channelId,
+   channelId: channelIdToUse,
    pressAction: { id: "default" },
    timeoutAfter: 3500,
    onlyAlertOnce: false,
@@ -305,6 +331,12 @@ async function showBeepNotification(snapshot: TimerSnapshot, kind: "short" | "lo
    timestamp: Date.now(),
   },
  });
+
+ if (useAudio) {
+  addBreadcrumb("audio-routing", `Beep played via Notifee (background - ${kind})`, "info");
+ } else {
+  addBreadcrumb("audio-routing", `Beep suppressed from Notifee (foreground - ${kind})`, "info");
+ }
 }
 
 export async function ensureTimerNotificationsReady() {

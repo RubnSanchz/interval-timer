@@ -8,6 +8,7 @@ import {
     clearStoredTimerState,
     getCurrentTimerSnapshot,
     readStoredTimerState,
+    recordAppState,
     startTimerForegroundService,
     stopTimerForegroundService,
     TIMER_NOTIFICATION_ACTIONS,
@@ -186,6 +187,10 @@ function TimerActiveScreen({ config }: { config: TimerConfig }) {
   const subscription = AppState.addEventListener("change", (nextState) => {
    const previousState = appStateRef.current;
    appStateRef.current = nextState;
+
+   // Update audio routing state
+   void recordAppState(nextState === "active" ? "active" : "background");
+
    if (previousState === "active" && nextState !== "active") {
     clearScheduledBeeps();
     const snapshot = timerStateRef.current;
