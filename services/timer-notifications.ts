@@ -10,6 +10,7 @@ import { formatTime } from "@/utils/formatTime";
 import notifee, { AndroidImportance, AuthorizationStatus } from "@notifee/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { FloatingBubbleHelper } from "tylo-floating-bubble";
 
 export const TIMER_NOTIFICATION_ACTIONS = {
  PAUSE: "timer.pause",
@@ -23,6 +24,7 @@ export type StoredTimerState = {
 };
 
 const STORAGE_KEY = "intervalTimer.timerState.v2";
+const SETTINGS_STORAGE_KEY = "intervalTimer.settings.v1";
 const FOREGROUND_CHANNEL_ID = "timer-foreground";
 const ALERT_CHANNEL_ID_SHORT = "timer-alerts-short-v1";
 const ALERT_CHANNEL_ID_LONG = "timer-alerts-long-v1";
@@ -31,6 +33,10 @@ const ALERT_SOUND_LONG = "beep_long";
 const FOREGROUND_NOTIFICATION_ID = "timer-foreground";
 const ALERT_NOTIFICATION_ID = "timer-alert";
 const ALERT_MIN_GAP_MS = 320;
+
+type StoredAppSettings = {
+ androidFloatingBubbleEnabled?: boolean;
+};
 
 function logTimerError(scope: string, error: unknown) {
  const message = error instanceof Error ? error.message : String(error);
@@ -99,6 +105,55 @@ function getStatusTitle(snapshot: TimerSnapshot) {
  if (snapshot.status === "paused") return "Temporizador pausado";
  if (snapshot.status === "done") return "Entreno completado";
  return "Intervalo en curso";
+}
+
+function buildBubbleSubtitle(snapshot: TimerSnapshot, config: TimerConfig) {
+ const phaseLabel = getPhaseLabel(snapshot.phase);
+ const setLabel = `${Math.min(snapshot.setIndex, config.sets)}/${config.sets}`;
+ return `${phaseLabel} - ${formatTime(snapshot.remaining)} - Set ${setLabel}`;
+}
+
+async function isFloatingBubbleEnabled() {
+ try {
+  const raw = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+  if (!raw) return false;
+  const parsed = JSON.parse(raw) as StoredAppSettings;
+  return parsed?.androidFloatingBubbleEnabled === true;
+ } catch {
+  return false;
+ }
+}
+
+async function updateFloatingBubble(snapshot: TimerSnapshot, config: TimerConfig) {
+ if (Platform.OS !== "android") return;
+ const bubbleEnabled = await isFloatingBubbleEnabled();
+ if (!bubbleEnabled) {
+  try {
+   await FloatingBubbleHelper.hideBubble();
+  } catch {}
+  return;
+ }
+
+ try {
+  const granted = await FloatingBubbleHelper.checkPermission();
+  if (!granted) {
+   await FloatingBubbleHelper.hideBubble();
+   return;
+  }
+ } catch {
+  return;
+ }
+
+ try {
+  await FloatingBubbleHelper.showBubble({
+   title: "Timer activo",
+   subtitle: buildBubbleSubtitle(snapshot, config),
+   showBadge: false,
+   autoRequestPermission: false,
+  });
+ } catch (error) {
+  logTimerError("bubble-update", error);
+ }
 }
 
 function buildStatusBody(snapshot: TimerSnapshot, config: TimerConfig) {
@@ -214,6 +269,7 @@ export async function startTimerForegroundService(state: StoredTimerState) {
   await ensureChannelsConfigured();
   const snapshot = getCurrentTimerSnapshot(state, Date.now());
   await updateForegroundNotification(snapshot, state.config);
+  await updateFloatingBubble(snapshot, state.config);
  } catch (error) {
   logTimerError("start-service", error);
  }
@@ -236,6 +292,9 @@ export async function stopTimerForegroundService() {
  } catch (error) {
   logTimerError("cancel-alert-notification", error);
  }
+ try {
+  await FloatingBubbleHelper.hideBubble();
+ } catch {}
 }
 
 export async function handleTimerNotificationAction(actionId: string) {
@@ -347,6 +406,7 @@ export function registerTimerForegroundService() {
      }
 
      await updateForegroundNotification(snapshot, stored.config);
+     await updateFloatingBubble(snapshot, stored.config);
     } catch (error) {
      logTimerError("foreground-service-loop", error);
     } finally {

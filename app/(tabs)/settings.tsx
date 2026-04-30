@@ -2,8 +2,9 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { useAppTheme, type ThemePreference } from "@/hooks/use-app-theme";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import Slider from "@react-native-community/slider";
-import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { FloatingBubbleHelper } from "tylo-floating-bubble";
 
 const OPTIONS: { value: ThemePreference; title: string; description: string }[] = [
  { value: "system", title: "Sistema", description: "Usa el tema del dispositivo" },
@@ -44,9 +45,12 @@ export default function SettingsScreen() {
  const activeSoundIndex = rawSoundIndex >= 0 ? rawSoundIndex : 2;
  const soundLabel = SOUND_LEVELS[activeSoundIndex]?.title ?? "Medio";
 
- const handleFloatingBubbleToggle = (enabled: boolean) => {
+ const handleFloatingBubbleToggle = async (enabled: boolean) => {
   if (!enabled) {
    setAndroidFloatingBubbleEnabled(false);
+   try {
+    await FloatingBubbleHelper.hideBubble();
+   } catch {}
    return;
   }
 
@@ -55,26 +59,33 @@ export default function SettingsScreen() {
    return;
   }
 
-  Alert.alert(
-   "Permiso necesario",
-   "La burbuja flotante necesita permiso para mostrarse sobre otras apps. Activa el permiso en ajustes del sistema.",
-   [
-    {
-     text: "Cancelar",
-     style: "cancel",
-     onPress: () => setAndroidFloatingBubbleEnabled(false),
+  const askPermission = async () => {
+   try {
+    const hasPermission = await FloatingBubbleHelper.checkPermission();
+    if (hasPermission) {
+     setAndroidFloatingBubbleEnabled(true);
+     return;
+    }
+    const granted = await FloatingBubbleHelper.requestPermission();
+    setAndroidFloatingBubbleEnabled(granted);
+   } catch {
+    setAndroidFloatingBubbleEnabled(false);
+   }
+  };
+
+  Alert.alert("Permiso necesario", "La burbuja flotante necesita permiso para mostrarse sobre otras apps.", [
+   {
+    text: "Cancelar",
+    style: "cancel",
+    onPress: () => setAndroidFloatingBubbleEnabled(false),
+   },
+   {
+    text: "Conceder permiso",
+    onPress: () => {
+     void askPermission();
     },
-    {
-     text: "Abrir ajustes",
-     onPress: () => {
-      setAndroidFloatingBubbleEnabled(true);
-      void Linking.openSettings().catch(() => {
-       setAndroidFloatingBubbleEnabled(false);
-      });
-     },
-    },
-   ],
-  );
+   },
+  ]);
  };
 
  return (
