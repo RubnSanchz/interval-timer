@@ -494,96 +494,107 @@ export function registerTimerForegroundService() {
    let stopped = false;
    let inFlight = false;
    let tickCount = 0;
-   let watchdogInterval: any = null;
+   let watchdogInterval: ReturnType<typeof setInterval> | null = null;
+   let pendingTickTimeout: ReturnType<typeof setTimeout> | null = null;
 
-   const interval = setInterval(async () => {
-    if (stopped || inFlight) return;
-    inFlight = true;
-    tickCount++;
+   const stopForegroundLoop = async () => {
+    stopped = true;
+    if (pendingTickTimeout) clearTimeout(pendingTickTimeout);
+    if (watchdogInterval) clearInterval(watchdogInterval);
+    await stopTimerForegroundService();
+    serviceWatchdog.isRunning = false;
+   };
 
-    try {
-     const stored = await readStoredTimerState();
-     if (!stored) {
-      addBreadcrumb("foreground-service-loop", "No stored state, stopping service", "warn");
-      stopped = true;
-      clearInterval(interval);
-      if (watchdogInterval) clearInterval(watchdogInterval);
-      await stopTimerForegroundService();
-      serviceWatchdog.isRunning = false;
-      resolve();
+   const scheduleNextTick = () => {
+    if (stopped) return;
+
+    pendingTickTimeout = setTimeout(async () => {
+     if (stopped || inFlight) {
+      scheduleNextTick();
       return;
      }
+     inFlight = true;
+     tickCount++;
 
-     const now = Date.now();
-     const elapsedSeconds = Math.max(0, Math.floor((now - stored.updatedAt) / 1000));
-     let snapshot = stored.snapshot;
-     let beepEvents: BeepEvent[] = [];
-
-     if (elapsedSeconds > 0) {
-      const result = advanceTimerBySecondsWithBeeps(stored.snapshot, stored.config, elapsedSeconds);
-      snapshot = result.snapshot;
-      beepEvents = result.beeps;
-     }
-
-     const consumedAt = stored.updatedAt + elapsedSeconds * 1000;
-     await persistTimerState({
-      config: stored.config,
-      snapshot,
-      updatedAt: consumedAt,
-     });
-
-     if (beepEvents.length > 0) {
-      const tickStartedAt = now;
-      let lastOffset: number | null = null;
-      for (const event of beepEvents) {
-       const nowTime = Date.now();
-       const secondsBehind = Math.max(0, elapsedSeconds - event.offsetSeconds);
-       const desiredAt = tickStartedAt - secondsBehind * 1000;
-       const offsetGapMs =
-        lastOffset === null ? 0 : Math.max((event.offsetSeconds - lastOffset) * 1000, ALERT_MIN_GAP_MS);
-       const scheduledAt = Math.max(desiredAt, nowTime, lastAlertAt + offsetGapMs);
-       const delayMs = scheduledAt - nowTime;
-       lastAlertAt = scheduledAt;
-       lastOffset = event.offsetSeconds;
-       if (delayMs > 0) {
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
-       }
-       const channelId = event.kind === "long" ? ALERT_CHANNEL_ID_LONG : ALERT_CHANNEL_ID_SHORT;
-       if (channelId !== lastAlertChannelId) {
-        try {
-         await notifee.cancelNotification(ALERT_NOTIFICATION_ID);
-        } catch {}
-        lastAlertChannelId = channelId;
-       }
-       await showBeepNotification(event.snapshot, event.kind, channelId);
+     try {
+      const stored = await readStoredTimerState();
+      if (!stored) {
+       addBreadcrumb("foreground-service-loop", "No stored state, stopping service", "warn");
+       await stopForegroundLoop();
+       resolve();
+       return;
       }
-     }
 
-     if (snapshot.status === "paused" || snapshot.status === "done") {
-      addBreadcrumb("foreground-service-loop", `Timer finished (status: ${snapshot.status})`, "info");
-      stopped = true;
-      clearInterval(interval);
-      if (watchdogInterval) clearInterval(watchdogInterval);
-      await stopTimerForegroundService();
-      serviceWatchdog.isRunning = false;
-      resolve();
-      return;
-     }
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0, Math.floor((now - stored.updatedAt) / 1000));
+      let snapshot = stored.snapshot;
+      let beepEvents: BeepEvent[] = [];
 
-     await updateForegroundNotification(snapshot, stored.config);
-     await updateFloatingBubble(snapshot, stored.config);
-     recordHeartbeat();
-     addBreadcrumb(
-      "foreground-service-loop",
-      `Tick #${tickCount} completed (elapsed: ${elapsedSeconds}s, phase: ${snapshot.phase})`,
-      "info",
-     );
-    } catch (error) {
-     logTimerError("foreground-service-loop", error);
-    } finally {
-     inFlight = false;
-    }
-   }, 1000);
+      if (elapsedSeconds > 0) {
+       const result = advanceTimerBySecondsWithBeeps(stored.snapshot, stored.config, elapsedSeconds);
+       snapshot = result.snapshot;
+       beepEvents = result.beeps;
+      }
+
+      const consumedAt = stored.updatedAt + elapsedSeconds * 1000;
+      await persistTimerState({
+       config: stored.config,
+       snapshot,
+       updatedAt: consumedAt,
+      });
+
+      if (beepEvents.length > 0) {
+       const tickStartedAt = now;
+       let lastOffset: number | null = null;
+       for (const event of beepEvents) {
+        const nowTime = Date.now();
+        const secondsBehind = Math.max(0, elapsedSeconds - event.offsetSeconds);
+        const desiredAt = tickStartedAt - secondsBehind * 1000;
+        const offsetGapMs =
+         lastOffset === null ? 0 : Math.max((event.offsetSeconds - lastOffset) * 1000, ALERT_MIN_GAP_MS);
+        const scheduledAt = Math.max(desiredAt, nowTime, lastAlertAt + offsetGapMs);
+        const delayMs = scheduledAt - nowTime;
+        lastAlertAt = scheduledAt;
+        lastOffset = event.offsetSeconds;
+        if (delayMs > 0) {
+         await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
+        }
+        const channelId = event.kind === "long" ? ALERT_CHANNEL_ID_LONG : ALERT_CHANNEL_ID_SHORT;
+        if (channelId !== lastAlertChannelId) {
+         try {
+          await notifee.cancelNotification(ALERT_NOTIFICATION_ID);
+         } catch {}
+         lastAlertChannelId = channelId;
+        }
+        await showBeepNotification(event.snapshot, event.kind, channelId);
+       }
+      }
+
+      if (snapshot.status === "paused" || snapshot.status === "done") {
+       addBreadcrumb("foreground-service-loop", `Timer finished (status: ${snapshot.status})`, "info");
+       await stopForegroundLoop();
+       resolve();
+       return;
+      }
+
+      await updateForegroundNotification(snapshot, stored.config);
+      await updateFloatingBubble(snapshot, stored.config);
+      recordHeartbeat();
+      addBreadcrumb(
+       "foreground-service-loop",
+       `Tick #${tickCount} completed (elapsed: ${elapsedSeconds}s, phase: ${snapshot.phase})`,
+       "info",
+      );
+     } catch (error) {
+      logTimerError("foreground-service-loop", error);
+     } finally {
+      inFlight = false;
+      scheduleNextTick();
+     }
+    }, 1000);
+   };
+
+   scheduleNextTick();
 
    // Watchdog timer: check if main loop is stuck
    watchdogInterval = setInterval(async () => {
@@ -592,16 +603,15 @@ export function registerTimerForegroundService() {
     const isHealthy = checkWatchdog();
     if (!isHealthy) {
      addBreadcrumb("watchdog", "Attempting service recovery...", "warn");
-     stopped = true;
-     clearInterval(interval);
-     clearInterval(watchdogInterval);
+     await stopForegroundLoop();
 
      try {
-      await stopTimerForegroundService();
       const stored = await readStoredTimerState();
       if (stored) {
        addBreadcrumb("watchdog", `Service restarted (recovered state: ${stored.snapshot.phase})`, "info");
        await startTimerForegroundService(stored);
+       resolve();
+       return;
       } else {
        addBreadcrumb("watchdog", "State recovery failed, stopping service", "error");
        serviceWatchdog.isRunning = false;

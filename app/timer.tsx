@@ -153,7 +153,6 @@ function TimerActiveScreen({ config }: { config: TimerConfig }) {
      // Check if app is still in foreground when beep is scheduled
      if (appStateRef.current !== "active") {
       // App went to background - record this beep for rescheduling
-      void recordAppState("background"); // Ensure app state is recorded
       await recordBeepDuringTransition(event.kind);
       return;
      }
