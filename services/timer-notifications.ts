@@ -57,6 +57,7 @@ type BreadcrumbEntry = {
 };
 
 let breadcrumbs: BreadcrumbEntry[] = [];
+let appStateCache: "active" | "background" | null = null;
 let serviceWatchdog: {
  lastHeartbeat: number;
  missedTicks: number;
@@ -92,6 +93,7 @@ export function getServiceBreadcrumbs(): BreadcrumbEntry[] {
 }
 
 export async function recordAppState(state: "active" | "background") {
+ appStateCache = state;
  try {
   await AsyncStorage.setItem(APP_STATE_STORAGE_KEY, state);
   addBreadcrumb("app-state", `App state updated: ${state}`, "info");
@@ -101,11 +103,29 @@ export async function recordAppState(state: "active" | "background") {
 }
 
 async function isAppInForeground(): Promise<boolean> {
+ if (appStateCache) return appStateCache === "active";
  try {
   const state = await AsyncStorage.getItem(APP_STATE_STORAGE_KEY);
+  if (state === "active" || state === "background") {
+   appStateCache = state;
+  }
   return state === "active";
  } catch {
   return false;
+ }
+}
+
+async function hideFloatingBubbleSafely() {
+ try {
+  await FloatingBubbleHelper.hideBubble();
+ } catch {}
+}
+
+async function cancelNotificationSafely(notificationId: string, scope: string) {
+ try {
+  await notifee.cancelNotification(notificationId);
+ } catch (error) {
+  logTimerError(scope, error);
  }
 }
 
@@ -266,16 +286,14 @@ async function updateFloatingBubble(snapshot: TimerSnapshot, config: TimerConfig
  if (Platform.OS !== "android") return;
  const bubbleEnabled = await isFloatingBubbleEnabled();
  if (!bubbleEnabled) {
-  try {
-   await FloatingBubbleHelper.hideBubble();
-  } catch {}
+  await hideFloatingBubbleSafely();
   return;
  }
 
  try {
   const granted = await FloatingBubbleHelper.checkPermission();
   if (!granted) {
-   await FloatingBubbleHelper.hideBubble();
+   await hideFloatingBubbleSafely();
    return;
   }
  } catch {
@@ -433,19 +451,9 @@ export async function stopTimerForegroundService() {
  } catch (error) {
   logTimerError("stop-service", error);
  }
- try {
-  await notifee.cancelNotification(FOREGROUND_NOTIFICATION_ID);
- } catch (error) {
-  logTimerError("cancel-foreground-notification", error);
- }
- try {
-  await notifee.cancelNotification(ALERT_NOTIFICATION_ID);
- } catch (error) {
-  logTimerError("cancel-alert-notification", error);
- }
- try {
-  await FloatingBubbleHelper.hideBubble();
- } catch {}
+ await cancelNotificationSafely(FOREGROUND_NOTIFICATION_ID, "cancel-foreground-notification");
+ await cancelNotificationSafely(ALERT_NOTIFICATION_ID, "cancel-alert-notification");
+ await hideFloatingBubbleSafely();
 }
 
 export async function handleTimerNotificationAction(actionId: string) {
