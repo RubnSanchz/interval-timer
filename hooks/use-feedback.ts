@@ -35,7 +35,6 @@ export function useFeedback() {
   const [hapticsAvailable, setHapticsAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
-    let isActive = true;
     async function configureAudio() {
       try {
         if (Platform.OS === "web") return;
@@ -52,22 +51,9 @@ export function useFeedback() {
       }
     }
     configureAudio();
-    const checkAvailability = async () => {
-      if (Platform.OS === "web" || typeof Haptics.isAvailableAsync !== "function") {
-        if (isActive) setHapticsAvailable(false);
-        return;
-      }
-      try {
-        const available = await Haptics.isAvailableAsync();
-        if (isActive) setHapticsAvailable(available);
-      } catch {
-        if (isActive) setHapticsAvailable(false);
-      }
-    };
-    checkAvailability();
-    return () => {
-      isActive = false;
-    };
+    // expo-haptics 15 no expone isAvailableAsync: comprobarla dejaba la vibración siempre apagada en
+    // Android/iOS. Hay vibración en nativo; en web, no.
+    setHapticsAvailable(Platform.OS !== "web");
   }, []);
 
   useEffect(() => {
