@@ -183,6 +183,7 @@ const styles = StyleSheet.create({
  optionText: { flex: 1, gap: 4 },
  optionTitle: { fontSize: 15, fontWeight: "600" },
  optionDescription: { fontSize: 13 },
+ radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
  sliderCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 },
  sliderHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
  sliderTitle: { fontSize: 14, fontWeight: "600" },
