@@ -110,7 +110,7 @@ function TimerRunner({ config }: { config: TimerConfig }) {
  const timerStateRef = useRef<TimerSnapshot>({ phase, setIndex, remaining, status, pending });
  const lastTickAtRef = useRef<number | null>(null);
  const configRef = useRef(config);
- const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+ const appStateRef = useRef<AppStateStatus>((AppState.currentState ?? "active") as AppStateStatus);
  const pauseTimerRef = useRef<() => void>(() => {});
  const skipSetRef = useRef<() => void>(() => {});
 
@@ -189,6 +189,8 @@ function TimerRunner({ config }: { config: TimerConfig }) {
  }, [status]);
 
  useEffect(() => {
+  // A new configuration restarts the session: the timer state follows it on purpose.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   setPhase(PREP_SECONDS > 0 ? "prep" : "exercise");
   setSetIndex(1);
   setRemaining(PREP_SECONDS > 0 ? PREP_SECONDS : config.exerciseSeconds);
@@ -287,6 +289,8 @@ function TimerRunner({ config }: { config: TimerConfig }) {
   if (remaining > 0) return;
 
   if (phase === "prep") {
+   // The state machine advances when the countdown reaches 0: a transition, not a render cascade.
+   // eslint-disable-next-line react-hooks/set-state-in-effect
    setPhase("exercise");
    setRemaining(config.exerciseSeconds);
    return;

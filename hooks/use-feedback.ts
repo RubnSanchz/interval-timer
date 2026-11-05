@@ -1,4 +1,4 @@
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync, type AudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Vibration } from "react-native";
@@ -12,8 +12,8 @@ const LONG_BEEP = require("../assets/sounds/beep-long.wav");
 const VOLUME_GAMMA = 1.6;
 
 type SoundRefs = {
-  short: Audio.Sound | null;
-  long: Audio.Sound | null;
+  short: AudioPlayer | null;
+  long: AudioPlayer | null;
 };
 
 function clampVolume(value: number) {
@@ -38,14 +38,12 @@ export function useFeedback() {
     async function configureAudio() {
       try {
         if (Platform.OS === "web") return;
-        await Audio.setIsEnabledAsync(true);
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
-          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-          interruptionModeIOS: InterruptionModeIOS.DuckOthers,
+        await setIsAudioActiveAsync(true);
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+          shouldPlayInBackground: false,
+          interruptionMode: "duckOthers",
         });
       } catch {
       }
@@ -58,17 +56,15 @@ export function useFeedback() {
 
   useEffect(() => {
     let isActive = true;
-    async function loadSound(kind: BeepKind, asset: number) {
+    function loadSound(kind: BeepKind, asset: number) {
       try {
-        const { sound } = await Audio.Sound.createAsync(asset, {
-          volume: initialVolume.current,
-          shouldPlay: false,
-        });
+        const player = createAudioPlayer(asset);
+        player.volume = initialVolume.current;
         if (!isActive) {
-          await sound.unloadAsync();
+          player.remove();
           return;
         }
-        soundRefs.current[kind] = sound;
+        soundRefs.current[kind] = player;
       } catch {
       }
     }
@@ -78,15 +74,18 @@ export function useFeedback() {
       isActive = false;
       const current = soundRefs.current;
       soundRefs.current = { short: null, long: null };
-      current.short?.unloadAsync().catch(() => {});
-      current.long?.unloadAsync().catch(() => {});
+      try {
+        current.short?.remove();
+        current.long?.remove();
+      } catch {
+      }
     };
   }, []);
 
   useEffect(() => {
     const current = soundRefs.current;
-    current.short?.setVolumeAsync(effectiveVolume).catch(() => {});
-    current.long?.setVolumeAsync(effectiveVolume).catch(() => {});
+    if (current.short) current.short.volume = effectiveVolume;
+    if (current.long) current.long.volume = effectiveVolume;
   }, [effectiveVolume]);
 
   const triggerBeepHaptics = useCallback(
@@ -125,17 +124,18 @@ export function useFeedback() {
       if (!sound) {
         try {
           const asset = kind === "short" ? SHORT_BEEP : LONG_BEEP;
-          const { sound: newSound } = await Audio.Sound.createAsync(asset, {
-            volume: effectiveVolume,
-            shouldPlay: true,
-          });
-          soundRefs.current[kind] = newSound;
+          const player = createAudioPlayer(asset);
+          player.volume = effectiveVolume;
+          player.play();
+          soundRefs.current[kind] = player;
         } catch {
         }
         return;
       }
       try {
-        await sound.replayAsync();
+        // expo-audio has no replay: back to the start, then play.
+        await sound.seekTo(0);
+        sound.play();
       } catch {
       }
     },
