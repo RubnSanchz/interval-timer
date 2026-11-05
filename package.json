@@ -48,5 +48,9 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "postcss": "^8.5.32",
+    "brace-expansion@^1": "^1.1.21"
+  }
 }
